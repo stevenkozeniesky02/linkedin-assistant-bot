@@ -20,9 +20,11 @@ load_dotenv()
 
 # Import modules
 from ai import get_ai_provider
-from linkedin import LinkedInClient, PostManager, EngagementManager
-from database import Database, Post, Comment, Analytics
-from utils import Scheduler
+from linkedin import LinkedInClient, PostManager, EngagementManager, ConnectionManager
+from database import Database, Post, Comment, Analytics, Connection, Activity, SafetyAlert
+from utils import Scheduler, SafetyMonitor
+from utils.analytics_engine import AnalyticsEngine
+from utils.analytics_visualizer import AnalyticsVisualizer
 
 # Initialize console for rich output
 console = Console()
@@ -1041,12 +1043,61 @@ def optimize_post(topic):
 
 
 @cli.command()
-@click.option('--check-interval', default=None, type=int, help='Override check interval (seconds)')
-@click.option('--strategy', type=click.Choice(['conservative', 'balanced', 'aggressive']), help='Engagement strategy')
-def autonomous(check_interval, strategy):
-    """Run autonomous agent for continuous posting and engagement"""
+@click.option('--days', default=30, help='Number of days to analyze (default: 30)')
+@click.option('--summary', is_flag=True, help='Show quick summary instead of full dashboard')
+@click.option('--with-insights', is_flag=True, help='Generate AI-powered insights (requires AI provider)')
+def dashboard(days, summary, with_insights):
+    """Display advanced analytics dashboard with performance insights"""
     try:
-        from autonomous_agent import AutonomousAgent
+        # Load configuration
+        config = load_config()
+        db = Database(config)
+        session = db.get_session()
+
+        # Initialize analytics engine
+        ai_provider = None
+        if with_insights:
+            try:
+                ai_provider = get_ai_provider(config)
+            except Exception as e:
+                console.print(f"[yellow]Warning: Could not initialize AI provider for insights: {e}[/yellow]")
+
+        analytics_engine = AnalyticsEngine(session, ai_provider=ai_provider)
+        visualizer = AnalyticsVisualizer()
+
+        # Get dashboard data
+        console.print(f"\n[cyan]Analyzing last {days} days of performance...[/cyan]\n")
+        dashboard_data = analytics_engine.get_complete_dashboard(days_back=days)
+
+        # Display summary or full dashboard
+        if summary:
+            visualizer.display_quick_summary(dashboard_data)
+        else:
+            # Generate insights if requested
+            insights = None
+            if with_insights:
+                console.print("[cyan]Generating AI-powered insights...[/cyan]\n")
+                insights = analytics_engine.generate_ai_insights(dashboard_data)
+
+            visualizer.display_complete_dashboard(dashboard_data, insights=insights)
+
+        session.close()
+        db.close()
+
+    except Exception as e:
+        console.print(f"[red]Error: {e}[/red]")
+        import traceback
+        traceback.print_exc()
+
+
+@cli.command()
+@click.option('--check-interval', default=None, type=int, help='Override check interval (seconds)')
+@click.option('--max-posts', default=None, type=int, help='Max posts to retrieve per cycle')
+@click.option('--max-engagements', default=None, type=int, help='Max engagements per cycle')
+def autonomous(check_interval, max_posts, max_engagements):
+    """Run autonomous agent v2 with full safety and campaign integration"""
+    try:
+        from autonomous_agent_v2 import AutonomousAgentV2
 
         # Load config
         config = load_config()
@@ -1055,21 +1106,934 @@ def autonomous(check_interval, strategy):
         if check_interval:
             config.setdefault('autonomous_agent', {})['check_interval'] = check_interval
 
-        if strategy:
-            config.setdefault('autonomous_agent', {})['engagement_strategy'] = strategy
+        if max_posts:
+            config.setdefault('autonomous_agent', {})['max_posts_per_cycle'] = max_posts
+
+        if max_engagements:
+            config.setdefault('autonomous_agent', {})['max_engagements_per_cycle'] = max_engagements
 
         # Save modified config temporarily
         with open('config.yaml', 'w') as f:
             yaml.dump(config, f)
 
-        # Initialize and run agent
-        agent = AutonomousAgent()
+        # Initialize and run agent v2
+        console.print("[bold green]Starting Autonomous Agent v2.0...[/bold green]")
+        console.print("[dim]Using: SafetyMonitor + CampaignExecutor + ConnectionManager[/dim]\n")
+
+        agent = AutonomousAgentV2()
         agent.run()
 
     except KeyboardInterrupt:
         console.print("\n[yellow]Autonomous agent stopped[/yellow]")
     except Exception as e:
         console.print(f"[red]Error: {e}[/red]")
+        import traceback
+        traceback.print_exc()
+
+
+@cli.command()
+def safety_status():
+    """Check current safety status and activity limits"""
+    try:
+        # Load configuration
+        config = load_config()
+        db = Database(config)
+        session = db.get_session()
+
+        # Initialize safety monitor
+        safety_monitor = SafetyMonitor(session, config)
+
+        # Get safety status
+        status = safety_monitor.get_safety_status()
+
+        console.print("\n[bold blue]═══ Safety Status ═══[/bold blue]\n")
+
+        # Status indicator with color
+        status_colors = {
+            'safe': 'green',
+            'warning': 'yellow',
+            'alerts_active': 'yellow',
+            'limit_reached': 'red'
+        }
+        color = status_colors.get(status['status'], 'white')
+
+        console.print(f"Status: [{color}]{status['status'].replace('_', ' ').upper()}[/{color}]\n")
+
+        # Activity counts
+        console.print("[bold cyan]Activity Counts:[/bold cyan]")
+        counts_table = Table(show_header=False)
+        counts_table.add_column("Metric", style="cyan")
+        counts_table.add_column("Count", justify="right", style="white")
+
+        counts_table.add_row("Last Hour", str(status['activity_counts']['last_hour']))
+        counts_table.add_row("Last 24 Hours", str(status['activity_counts']['last_24h']))
+        counts_table.add_row("Last 7 Days", str(status['activity_counts']['last_7d']))
+
+        console.print(counts_table)
+        console.print()
+
+        # Limits
+        console.print("[bold cyan]Rate Limits:[/bold cyan]")
+        limits_table = Table(show_header=False)
+        limits_table.add_column("Limit", style="cyan")
+        limits_table.add_column("Max", justify="right", style="white")
+
+        limits_table.add_row("Hourly Max", str(status['limits']['hourly_max']))
+        limits_table.add_row("Daily Max", str(status['limits']['daily_max']))
+        limits_table.add_row("Posts per Day", str(status['limits']['posts_daily_max']))
+        limits_table.add_row("Comments per Day", str(status['limits']['comments_daily_max']))
+        limits_table.add_row("Connections per Day", str(status['limits']['connections_daily_max']))
+
+        console.print(limits_table)
+        console.print()
+
+        # Utilization
+        console.print("[bold cyan]Utilization:[/bold cyan]")
+        hourly_util = status['utilization']['hourly_percent']
+        daily_util = status['utilization']['daily_percent']
+
+        hourly_color = 'green' if hourly_util < 50 else 'yellow' if hourly_util < 80 else 'red'
+        daily_color = 'green' if daily_util < 50 else 'yellow' if daily_util < 80 else 'red'
+
+        console.print(f"  Hourly: [{hourly_color}]{hourly_util}%[/{hourly_color}]")
+        console.print(f"  Daily:  [{daily_color}]{daily_util}%[/{daily_color}]")
+        console.print()
+
+        # Risk score
+        risk_color = 'green' if status['risk_score'] < 0.3 else 'yellow' if status['risk_score'] < 0.6 else 'red'
+        console.print(f"[bold]Risk Score:[/bold] [{risk_color}]{status['risk_score']}[/{risk_color}] (0-1 scale)")
+        console.print()
+
+        # Active alerts
+        if status['active_alerts'] > 0:
+            console.print(f"[bold red]Active Alerts: {status['active_alerts']}[/bold red]\n")
+
+            alerts_table = Table(show_header=True, header_style="bold magenta")
+            alerts_table.add_column("Type", style="cyan")
+            alerts_table.add_column("Severity", style="yellow")
+            alerts_table.add_column("Message", width=50)
+
+            for alert in status['alert_details']:
+                severity_color = 'yellow' if alert['severity'] == 'medium' else 'red' if alert['severity'] == 'high' else 'white'
+                alerts_table.add_row(
+                    alert['type'],
+                    f"[{severity_color}]{alert['severity']}[/{severity_color}]",
+                    alert['message']
+                )
+
+            console.print(alerts_table)
+            console.print()
+        else:
+            console.print("[green]No active alerts[/green]\n")
+
+        session.close()
+        db.close()
+
+    except Exception as e:
+        console.print(f"[red]Error: {e}[/red]")
+
+
+@cli.command()
+@click.option('--action', type=click.Choice(['add', 'list', 'top', 'mark-target']), default='list', help='Action to perform')
+@click.option('--name', help='Connection name (for add action)')
+@click.option('--url', help='LinkedIn profile URL (for add/mark-target action)')
+@click.option('--title', help='Job title (for add action)')
+@click.option('--company', help='Company (for add action)')
+@click.option('--limit', default=10, help='Limit results (for top action)')
+def connections(action, name, url, title, company, limit):
+    """Manage LinkedIn connections"""
+    try:
+        # Load configuration
+        config = load_config()
+        db = Database(config)
+        session = db.get_session()
+
+        # Initialize connection manager
+        conn_manager = ConnectionManager(session, config)
+
+        if action == 'add':
+            if not name or not url:
+                console.print("[red]Error: --name and --url are required for add action[/red]")
+                return
+
+            connection = conn_manager.add_connection(
+                name=name,
+                profile_url=url,
+                title=title,
+                company=company
+            )
+
+            console.print(f"\n[green]✓ Connection added: {connection.name}[/green]")
+            console.print(f"  Quality Score: {connection.quality_score}/10")
+            console.print()
+
+        elif action == 'list':
+            connections_list = conn_manager.get_all_connections(active_only=True)
+
+            if not connections_list:
+                console.print("\n[yellow]No connections found[/yellow]")
+                return
+
+            console.print(f"\n[bold blue]Your Connections ({len(connections_list)} total)[/bold blue]\n")
+
+            conn_table = Table(show_header=True, header_style="bold magenta")
+            conn_table.add_column("Name", style="cyan", width=25)
+            conn_table.add_column("Title", width=30)
+            conn_table.add_column("Company", width=20)
+            conn_table.add_column("Quality", justify="center", width=8)
+            conn_table.add_column("Engagement", width=10)
+
+            for conn in connections_list[:50]:  # Limit display to 50
+                quality_color = 'green' if conn.quality_score >= 7 else 'yellow' if conn.quality_score >= 4 else 'red'
+                conn_table.add_row(
+                    conn.name[:25],
+                    (conn.title or "N/A")[:30],
+                    (conn.company or "N/A")[:20],
+                    f"[{quality_color}]{conn.quality_score:.1f}[/{quality_color}]",
+                    conn.engagement_level or "none"
+                )
+
+            console.print(conn_table)
+            console.print()
+
+        elif action == 'top':
+            top_connections = conn_manager.get_top_connections(limit=limit)
+
+            if not top_connections:
+                console.print("\n[yellow]No connections found[/yellow]")
+                return
+
+            console.print(f"\n[bold green]Top {len(top_connections)} Connections[/bold green]\n")
+
+            top_table = Table(show_header=True, header_style="bold magenta")
+            top_table.add_column("Rank", justify="center", width=6)
+            top_table.add_column("Name", style="cyan", width=25)
+            top_table.add_column("Title", width=35)
+            top_table.add_column("Quality", justify="center", width=8)
+            top_table.add_column("Messages", justify="center", width=10)
+
+            for i, conn in enumerate(top_connections, 1):
+                total_messages = conn.messages_sent + conn.messages_received
+                top_table.add_row(
+                    f"#{i}",
+                    conn.name[:25],
+                    (conn.title or "N/A")[:35],
+                    f"[bold green]{conn.quality_score:.1f}[/bold green]",
+                    str(total_messages)
+                )
+
+            console.print(top_table)
+            console.print()
+
+        elif action == 'mark-target':
+            if not url:
+                console.print("[red]Error: --url is required for mark-target action[/red]")
+                return
+
+            connection = conn_manager.mark_target_audience(url, is_target=True)
+
+            if connection:
+                console.print(f"\n[green]✓ {connection.name} marked as target audience[/green]\n")
+            else:
+                console.print(f"\n[red]Connection not found: {url}[/red]\n")
+
+        session.close()
+        db.close()
+
+    except Exception as e:
+        console.print(f"[red]Error: {e}[/red]")
+
+
+@cli.command()
+@click.option('--days', default=30, help='Number of days to analyze (default: 30)')
+def network_analytics(days):
+    """View network analytics and growth metrics"""
+    try:
+        # Load configuration
+        config = load_config()
+        db = Database(config)
+        session = db.get_session()
+
+        # Initialize connection manager
+        conn_manager = ConnectionManager(session, config)
+
+        # Get analytics
+        analytics = conn_manager.get_network_analytics(days_back=days)
+        recommendations = conn_manager.get_connection_recommendations()
+
+        console.print(f"\n[bold blue]═══ Network Analytics (Last {days} Days) ═══[/bold blue]\n")
+
+        # Overview stats
+        console.print("[bold cyan]Network Overview:[/bold cyan]")
+        overview_table = Table(show_header=False)
+        overview_table.add_column("Metric", style="cyan", width=30)
+        overview_table.add_column("Value", justify="right", style="white")
+
+        overview_table.add_row("Total Connections", str(analytics['total_connections']))
+        overview_table.add_row("New Connections", str(analytics['recent_connections']))
+        overview_table.add_row("Average Quality Score", f"{analytics['avg_quality_score']}/10")
+        overview_table.add_row("Target Audience", f"{analytics['target_audience_count']} ({analytics['target_audience_percent']}%)")
+        overview_table.add_row("Recent Interactions", str(analytics['recent_interactions']))
+        overview_table.add_row("Growth Rate", f"{analytics['growth_rate_per_day']:.2f} per day")
+
+        console.print(overview_table)
+        console.print()
+
+        # Engagement breakdown
+        console.print("[bold cyan]Engagement Levels:[/bold cyan]")
+        engagement_table = Table(show_header=True, header_style="bold magenta")
+        engagement_table.add_column("Level", style="cyan")
+        engagement_table.add_column("Count", justify="right")
+        engagement_table.add_column("Percentage", justify="right")
+
+        total = analytics['total_connections']
+        for level in ['high', 'medium', 'low', 'none']:
+            count = analytics['engagement_breakdown'][level]
+            pct = (count / total * 100) if total > 0 else 0
+            color = 'green' if level == 'high' else 'yellow' if level == 'medium' else 'white'
+            engagement_table.add_row(
+                level.capitalize(),
+                str(count),
+                f"[{color}]{pct:.1f}%[/{color}]"
+            )
+
+        console.print(engagement_table)
+        console.print()
+
+        # Top companies
+        if analytics['top_companies']:
+            console.print("[bold cyan]Top Companies:[/bold cyan]")
+            companies_table = Table(show_header=True, header_style="bold magenta")
+            companies_table.add_column("Rank", justify="center", width=6)
+            companies_table.add_column("Company", style="cyan", width=40)
+            companies_table.add_column("Connections", justify="right")
+
+            for i, company_data in enumerate(analytics['top_companies'][:10], 1):
+                companies_table.add_row(
+                    f"#{i}",
+                    company_data['company'][:40],
+                    str(company_data['count'])
+                )
+
+            console.print(companies_table)
+            console.print()
+
+        # Recommendations
+        console.print("[bold cyan]Recommendations:[/bold cyan]")
+        health_color = 'green' if recommendations['health_status'] == 'good' else 'yellow'
+        console.print(f"Network Health: [{health_color}]{recommendations['health_status'].upper()}[/{health_color}]")
+        console.print(f"Overall Score: {recommendations['overall_score']:.1f}/10\n")
+
+        for rec in recommendations['recommendations']:
+            priority_color = 'red' if rec['priority'] == 'high' else 'yellow' if rec['priority'] == 'medium' else 'blue'
+            console.print(f"  [{priority_color}]●[/{priority_color}] {rec['message']}")
+            console.print(f"    [dim]→ {rec['action']}[/dim]")
+            console.print()
+
+        session.close()
+        db.close()
+
+    except Exception as e:
+        console.print(f"[red]Error: {e}[/red]")
+
+
+@cli.command()
+@click.option('--action', type=click.Choice(['create', 'list', 'activate', 'pause', 'analytics', 'recommendations']), required=True)
+@click.option('--campaign-id', type=int, help='Campaign ID (for activate, pause, analytics, recommendations)')
+@click.option('--name', help='Campaign name (for create)')
+@click.option('--type', 'campaign_type', type=click.Choice(['hashtag', 'company', 'influencer', 'topic']), help='Campaign type (for create)')
+@click.option('--description', help='Campaign description (for create)')
+@click.option('--targets', help='Comma-separated targets (for create). E.g., "#ai,#ml" or "Google,Microsoft"')
+@click.option('--max-per-day', type=int, default=10, help='Max actions per day (for create)')
+@click.option('--target-engagements', type=int, help='Target number of engagements (for create)')
+@click.option('--status', type=click.Choice(['draft', 'active', 'paused', 'completed']), help='Filter by status (for list)')
+def campaigns(action, campaign_id, name, campaign_type, description, targets, max_per_day, target_engagements, status):
+    """Manage engagement campaigns"""
+    try:
+        config = load_config()
+        db = Database(config)
+        session = db.get_session()
+
+        from linkedin.campaign_manager import CampaignManager
+        campaign_manager = CampaignManager(session, config)
+
+        if action == 'create':
+            if not name or not campaign_type or not targets:
+                console.print("[red]Error: --name, --type, and --targets are required for create action[/red]")
+                return
+
+            # Parse targets
+            target_list = []
+            target_values = [t.strip() for t in targets.split(',')]
+
+            for target_value in target_values:
+                if campaign_type == 'hashtag':
+                    # Ensure hashtag format
+                    if not target_value.startswith('#'):
+                        target_value = f"#{target_value}"
+                    target_list.append({'type': 'hashtag', 'value': target_value, 'priority': 'medium'})
+                elif campaign_type == 'company':
+                    target_list.append({'type': 'company', 'value': target_value, 'priority': 'medium'})
+                elif campaign_type == 'influencer':
+                    target_list.append({'type': 'profile', 'value': target_value, 'priority': 'high'})
+                elif campaign_type == 'topic':
+                    target_list.append({'type': 'keyword', 'value': target_value, 'priority': 'medium'})
+
+            campaign = campaign_manager.create_campaign(
+                name=name,
+                campaign_type=campaign_type,
+                description=description,
+                targets=target_list,
+                max_actions_per_day=max_per_day,
+                target_engagements=target_engagements
+            )
+
+            console.print(f"\n[green]✓ Campaign created: {campaign.name}[/green]")
+            console.print(f"  ID: {campaign.id}")
+            console.print(f"  Type: {campaign.campaign_type}")
+            console.print(f"  Targets: {len(target_list)}")
+            console.print(f"  Status: {campaign.status}")
+            console.print(f"\nRun 'python main.py campaigns --action activate --campaign-id {campaign.id}' to activate\n")
+
+        elif action == 'list':
+            campaigns_list = campaign_manager.list_campaigns(status=status)
+
+            if not campaigns_list:
+                console.print("\n[yellow]No campaigns found[/yellow]")
+                return
+
+            console.print(f"\n[bold blue]Campaigns ({len(campaigns_list)} total)[/bold blue]\n")
+
+            campaigns_table = Table(show_header=True, header_style="bold magenta")
+            campaigns_table.add_column("ID", justify="center", width=6)
+            campaigns_table.add_column("Name", style="cyan", width=25)
+            campaigns_table.add_column("Type", width=12)
+            campaigns_table.add_column("Status", width=10)
+            campaigns_table.add_column("Targets", justify="center", width=8)
+            campaigns_table.add_column("Engagements", justify="center", width=12)
+            campaigns_table.add_column("Success Rate", justify="center", width=13)
+
+            for campaign in campaigns_list:
+                status_color = 'green' if campaign.status == 'active' else 'yellow' if campaign.status == 'paused' else 'white'
+                success_color = 'green' if campaign.success_rate >= 80 else 'yellow' if campaign.success_rate >= 60 else 'red'
+
+                campaigns_table.add_row(
+                    str(campaign.id),
+                    campaign.name[:25],
+                    campaign.campaign_type,
+                    f"[{status_color}]{campaign.status}[/{status_color}]",
+                    str(len(campaign.targets)),
+                    str(campaign.total_engagements),
+                    f"[{success_color}]{campaign.success_rate:.1f}%[/{success_color}]"
+                )
+
+            console.print(campaigns_table)
+            console.print()
+
+        elif action == 'activate':
+            if not campaign_id:
+                console.print("[red]Error: --campaign-id required for activate action[/red]")
+                return
+
+            campaign = campaign_manager.activate_campaign(campaign_id)
+            if campaign:
+                console.print(f"\n[green]✓ Campaign '{campaign.name}' activated[/green]")
+                console.print(f"\nRun 'python main.py run-campaigns' to execute active campaigns\n")
+            else:
+                console.print(f"\n[red]Campaign {campaign_id} not found[/red]\n")
+
+        elif action == 'pause':
+            if not campaign_id:
+                console.print("[red]Error: --campaign-id required for pause action[/red]")
+                return
+
+            campaign = campaign_manager.pause_campaign(campaign_id)
+            if campaign:
+                console.print(f"\n[green]✓ Campaign '{campaign.name}' paused[/green]\n")
+            else:
+                console.print(f"\n[red]Campaign {campaign_id} not found[/red]\n")
+
+        elif action == 'analytics':
+            if not campaign_id:
+                console.print("[red]Error: --campaign-id required for analytics action[/red]")
+                return
+
+            analytics = campaign_manager.get_campaign_analytics(campaign_id)
+
+            if not analytics:
+                console.print(f"\n[red]Campaign {campaign_id} not found[/red]\n")
+                return
+
+            console.print(f"\n[bold blue]═══ Campaign Analytics: {analytics['campaign_name']} ═══[/bold blue]\n")
+
+            # Overview
+            console.print("[bold cyan]Overview:[/bold cyan]")
+            overview_table = Table(show_header=False)
+            overview_table.add_column("Metric", style="cyan", width=25)
+            overview_table.add_column("Value", justify="right", style="white")
+
+            overview_table.add_row("Campaign Type", analytics['campaign_type'])
+            overview_table.add_row("Status", analytics['status'].upper())
+            overview_table.add_row("Days Running", str(analytics['days_running']))
+            overview_table.add_row("Total Engagements", str(analytics['total_activities']))
+            overview_table.add_row("Success Rate", f"{analytics['success_rate']:.1f}%")
+            overview_table.add_row("Posts Engaged", str(analytics['total_posts_engaged']))
+            overview_table.add_row("Avg per Day", f"{analytics['avg_engagements_per_day']:.1f}")
+
+            if analytics.get('target_engagements'):
+                overview_table.add_row("Goal Progress", f"{analytics['goal_progress_percent']:.1f}%")
+
+            console.print(overview_table)
+            console.print()
+
+            # Activities by type
+            if analytics['activities_by_type']:
+                console.print("[bold cyan]Engagement Types:[/bold cyan]")
+                types_table = Table(show_header=True, header_style="bold magenta")
+                types_table.add_column("Type", style="cyan")
+                types_table.add_column("Count", justify="right")
+
+                for action_type, count in analytics['activities_by_type'].items():
+                    types_table.add_row(action_type.capitalize(), str(count))
+
+                console.print(types_table)
+                console.print()
+
+            # Target performance
+            if analytics['target_performance']:
+                console.print("[bold cyan]Target Performance:[/bold cyan]")
+                targets_table = Table(show_header=True, header_style="bold magenta")
+                targets_table.add_column("Type", style="cyan", width=12)
+                targets_table.add_column("Value", width=30)
+                targets_table.add_column("Engagements", justify="right", width=12)
+                targets_table.add_column("Success Rate", justify="right", width=13)
+
+                for target in analytics['target_performance'][:10]:
+                    success_color = 'green' if target['success_rate'] >= 80 else 'yellow' if target['success_rate'] >= 60 else 'red'
+                    targets_table.add_row(
+                        target['type'],
+                        target['value'][:30],
+                        str(target['engagements']),
+                        f"[{success_color}]{target['success_rate']:.1f}%[/{success_color}]"
+                    )
+
+                console.print(targets_table)
+                console.print()
+
+            # Top authors
+            if analytics['top_authors']:
+                console.print("[bold cyan]Top Engaged Authors:[/bold cyan]")
+                authors_table = Table(show_header=True, header_style="bold magenta")
+                authors_table.add_column("Rank", justify="center", width=6)
+                authors_table.add_column("Author", style="cyan", width=35)
+                authors_table.add_column("Engagements", justify="right")
+
+                for i, author_data in enumerate(analytics['top_authors'][:10], 1):
+                    authors_table.add_row(f"#{i}", author_data['author'][:35], str(author_data['count']))
+
+                console.print(authors_table)
+                console.print()
+
+        elif action == 'recommendations':
+            if not campaign_id:
+                console.print("[red]Error: --campaign-id required for recommendations action[/red]")
+                return
+
+            recommendations = campaign_manager.get_campaign_recommendations(campaign_id)
+
+            if not recommendations.get('recommendations'):
+                console.print(f"\n[green]Campaign is performing well - no recommendations at this time[/green]\n")
+                return
+
+            console.print(f"\n[bold blue]═══ Campaign Recommendations: {recommendations['campaign_name']} ═══[/bold blue]\n")
+            console.print(f"Status: {recommendations['status'].upper()}\n")
+
+            for rec in recommendations['recommendations']:
+                priority_color = 'red' if rec['priority'] == 'high' else 'yellow' if rec['priority'] == 'medium' else 'blue'
+                console.print(f"  [{priority_color}]●[/{priority_color}] [bold]{rec['message']}[/bold]")
+                console.print(f"    [dim]→ {rec['action']}[/dim]")
+                console.print()
+
+        session.close()
+        db.close()
+
+    except Exception as e:
+        console.print(f"[red]Error: {e}[/red]")
+        import traceback
+        traceback.print_exc()
+
+
+@cli.command()
+@click.option('--campaign-id', type=int, help='Run specific campaign (optional)')
+@click.option('--max-posts', type=int, default=20, help='Max posts to retrieve from feed')
+@click.option('--max-engagements', type=int, default=10, help='Max engagements to perform')
+def run_campaigns(campaign_id, max_posts, max_engagements):
+    """Execute active campaigns"""
+    try:
+        config = load_config()
+        db = Database(config)
+        session = db.get_session()
+
+        from linkedin.client import LinkedInClient
+        from utils.campaign_executor import CampaignExecutor
+
+        # Initialize LinkedIn client
+        client = LinkedInClient(config)
+
+        # Check if logged in
+        if not client.is_logged_in():
+            console.print("\n[yellow]Not logged in. Please login to LinkedIn first.[/yellow]")
+            console.print("Run: python main.py engage\n")
+            return
+
+        # Initialize campaign executor
+        executor = CampaignExecutor(session, client, config)
+
+        # Execute campaigns
+        if campaign_id:
+            console.print(f"\n[bold cyan]Executing Campaign ID: {campaign_id}[/bold cyan]")
+            result = executor.execute_single_campaign(campaign_id, max_posts=max_posts, max_engagements=max_engagements)
+        else:
+            console.print(f"\n[bold cyan]Executing All Active Campaigns[/bold cyan]")
+            result = executor.execute_campaigns(max_posts=max_posts, max_engagements=max_engagements)
+
+        # Display results
+        if result['success']:
+            console.print(f"\n[green]✓ {result.get('message', 'Campaign execution completed')}[/green]\n")
+        else:
+            console.print(f"\n[red]✗ {result.get('error', 'Campaign execution failed')}[/red]\n")
+
+        session.close()
+        db.close()
+
+    except Exception as e:
+        console.print(f"[red]Error: {e}[/red]")
+        import traceback
+        traceback.print_exc()
+
+
+@cli.command()
+@click.option('--action', type=click.Choice(['send', 'list', 'check']), required=True)
+@click.option('--profile-url', help='LinkedIn profile URL (for send action)')
+@click.option('--name', help='Target name (for send action)')
+@click.option('--title', help='Target job title (for send action)')
+@click.option('--company', help='Target company (for send action)')
+@click.option('--message', help='Custom message (optional, AI will generate if not provided)')
+@click.option('--status', type=click.Choice(['pending', 'accepted', 'declined', 'expired']), help='Filter by status (for list action)')
+@click.option('--limit', type=int, default=20, help='Limit results (for list action)')
+def connection_requests(action, profile_url, name, title, company, message, status, limit):
+    """Manage outgoing connection requests"""
+    try:
+        config = load_config()
+        db = Database(config)
+        session = db.get_session()
+
+        from utils.network_growth import NetworkGrowthAutomation
+        network_growth = NetworkGrowthAutomation(session, config)
+
+        if action == 'send':
+            if not profile_url or not name:
+                console.print("[red]Error: --profile-url and --name are required for send action[/red]")
+                return
+
+            console.print(f"\n[cyan]Sending connection request to {name}...[/cyan]")
+
+            request = network_growth.send_connection_request(
+                profile_url=profile_url,
+                name=name,
+                title=title,
+                company=company,
+                custom_message=message
+            )
+
+            if request:
+                console.print(f"\n[green]✓ Connection request sent![/green]")
+                console.print(f"  Target: {request.target_name}")
+                console.print(f"  Message: {request.message[:100]}...")
+                console.print(f"  Status: {request.status}")
+                console.print()
+            else:
+                console.print(f"\n[red]✗ Failed to send connection request[/red]")
+                console.print("Check safety limits or if request already sent\n")
+
+        elif action == 'list':
+            from database.models import ConnectionRequest
+
+            query = session.query(ConnectionRequest)
+
+            if status:
+                query = query.filter(ConnectionRequest.status == status)
+
+            requests = query.order_by(ConnectionRequest.sent_at.desc()).limit(limit).all()
+
+            if not requests:
+                console.print("\n[yellow]No connection requests found[/yellow]")
+                return
+
+            console.print(f"\n[bold blue]Connection Requests ({len(requests)} shown)[/bold blue]\n")
+
+            requests_table = Table(show_header=True, header_style="bold magenta")
+            requests_table.add_column("ID", justify="center", width=6)
+            requests_table.add_column("Name", style="cyan", width=25)
+            requests_table.add_column("Title", width=30)
+            requests_table.add_column("Status", width=10)
+            requests_table.add_column("Sent", width=12)
+
+            for req in requests:
+                status_color = 'green' if req.status == 'accepted' else 'yellow' if req.status == 'pending' else 'red'
+                sent_date = req.sent_at.strftime("%Y-%m-%d") if req.sent_at else "N/A"
+
+                requests_table.add_row(
+                    str(req.id),
+                    req.target_name[:25],
+                    (req.target_title or "N/A")[:30],
+                    f"[{status_color}]{req.status}[/{status_color}]",
+                    sent_date
+                )
+
+            console.print(requests_table)
+            console.print()
+
+        elif action == 'check':
+            console.print("\n[cyan]Checking status of pending requests...[/cyan]")
+
+            result = network_growth.check_pending_requests()
+
+            console.print(f"\n[bold blue]Pending Requests Status[/bold blue]")
+            console.print(f"  Total checked: {result['total_checked']}")
+            console.print(f"  Accepted: [green]{result['accepted']}[/green]")
+            console.print(f"  Declined: [red]{result['declined']}[/red]")
+            console.print(f"  Still pending: [yellow]{result['still_pending']}[/yellow]")
+            console.print()
+
+        session.close()
+        db.close()
+
+    except Exception as e:
+        console.print(f"[red]Error: {e}[/red]")
+        import traceback
+        traceback.print_exc()
+
+
+@cli.command()
+@click.option('--action', type=click.Choice(['create', 'list', 'enroll', 'stats']), required=True)
+@click.option('--sequence-id', type=int, help='Sequence ID (for enroll, stats actions)')
+@click.option('--name', help='Sequence name (for create action)')
+@click.option('--connection-id', type=int, help='Connection ID to enroll (for enroll action)')
+@click.option('--trigger', type=click.Choice(['new_connection', 'manual']), default='new_connection', help='Trigger type (for create action)')
+def message_sequences(action, sequence_id, name, connection_id, trigger):
+    """Manage automated message sequences"""
+    try:
+        config = load_config()
+        db = Database(config)
+        session = db.get_session()
+
+        from utils.network_growth import NetworkGrowthAutomation
+        from database.models import MessageSequence, SequenceEnrollment
+
+        network_growth = NetworkGrowthAutomation(session, config)
+
+        if action == 'create':
+            if not name:
+                console.print("[red]Error: --name is required for create action[/red]")
+                return
+
+            # Default welcome sequence
+            steps = [
+                {"delay_days": 0, "template": "welcome"},
+                {"delay_days": 3, "template": "follow_up"}
+            ]
+
+            console.print(f"\n[cyan]Creating message sequence: {name}...[/cyan]")
+
+            sequence = network_growth.create_message_sequence(
+                name=name,
+                steps=steps,
+                trigger_type=trigger
+            )
+
+            console.print(f"\n[green]✓ Message sequence created![/green]")
+            console.print(f"  ID: {sequence.id}")
+            console.print(f"  Name: {sequence.name}")
+            console.print(f"  Trigger: {sequence.trigger_type}")
+            console.print(f"  Steps: {len(steps)}")
+            console.print(f"\nSteps:")
+            for i, step in enumerate(steps, 1):
+                console.print(f"  {i}. Day {step['delay_days']}: {step['template']}")
+            console.print()
+
+        elif action == 'list':
+            sequences = session.query(MessageSequence).filter(
+                MessageSequence.is_active == True
+            ).order_by(MessageSequence.created_at.desc()).all()
+
+            if not sequences:
+                console.print("\n[yellow]No message sequences found[/yellow]")
+                console.print("Create one with: python main.py message-sequences --action create --name 'Welcome Sequence'\n")
+                return
+
+            console.print(f"\n[bold blue]Message Sequences ({len(sequences)} total)[/bold blue]\n")
+
+            sequences_table = Table(show_header=True, header_style="bold magenta")
+            sequences_table.add_column("ID", justify="center", width=6)
+            sequences_table.add_column("Name", style="cyan", width=30)
+            sequences_table.add_column("Trigger", width=15)
+            sequences_table.add_column("Enrollments", justify="center", width=12)
+            sequences_table.add_column("Response Rate", justify="center", width=14)
+
+            for seq in sequences:
+                response_color = 'green' if seq.response_rate >= 20 else 'yellow' if seq.response_rate >= 10 else 'white'
+
+                sequences_table.add_row(
+                    str(seq.id),
+                    seq.name[:30],
+                    seq.trigger_type,
+                    str(seq.total_started),
+                    f"[{response_color}]{seq.response_rate:.1f}%[/{response_color}]"
+                )
+
+            console.print(sequences_table)
+            console.print()
+
+        elif action == 'enroll':
+            if not sequence_id or not connection_id:
+                console.print("[red]Error: --sequence-id and --connection-id are required for enroll action[/red]")
+                return
+
+            console.print(f"\n[cyan]Enrolling connection {connection_id} in sequence {sequence_id}...[/cyan]")
+
+            enrollment = network_growth.enroll_in_sequence(
+                connection_id=connection_id,
+                sequence_id=sequence_id
+            )
+
+            if enrollment:
+                console.print(f"\n[green]✓ Connection enrolled in sequence![/green]")
+                console.print(f"  Enrollment ID: {enrollment.id}")
+                console.print(f"  First message: {enrollment.next_message_at.strftime('%Y-%m-%d %H:%M')}")
+                console.print()
+            else:
+                console.print(f"\n[red]✗ Failed to enroll connection[/red]")
+                console.print("Check that connection and sequence exist\n")
+
+        elif action == 'stats':
+            if not sequence_id:
+                console.print("[red]Error: --sequence-id is required for stats action[/red]")
+                return
+
+            sequence = session.query(MessageSequence).filter(
+                MessageSequence.id == sequence_id
+            ).first()
+
+            if not sequence:
+                console.print(f"\n[red]Sequence {sequence_id} not found[/red]\n")
+                return
+
+            enrollments = session.query(SequenceEnrollment).filter(
+                SequenceEnrollment.sequence_id == sequence_id
+            ).all()
+
+            console.print(f"\n[bold blue]═══ Sequence Stats: {sequence.name} ═══[/bold blue]\n")
+
+            # Overview
+            console.print("[bold cyan]Overview:[/bold cyan]")
+            overview_table = Table(show_header=False)
+            overview_table.add_column("Metric", style="cyan", width=25)
+            overview_table.add_column("Value", justify="right", style="white")
+
+            active_count = len([e for e in enrollments if e.status == 'active'])
+            completed_count = len([e for e in enrollments if e.status == 'completed'])
+
+            overview_table.add_row("Total Enrollments", str(sequence.total_started))
+            overview_table.add_row("Active", str(active_count))
+            overview_table.add_row("Completed", str(completed_count))
+            overview_table.add_row("Response Rate", f"{sequence.response_rate:.1f}%")
+
+            console.print(overview_table)
+            console.print()
+
+        session.close()
+        db.close()
+
+    except Exception as e:
+        console.print(f"[red]Error: {e}[/red]")
+        import traceback
+        traceback.print_exc()
+
+
+@cli.command()
+@click.option('--max-requests', type=int, default=5, help='Max incoming requests to process')
+def process_incoming(max_requests):
+    """Process incoming connection requests (auto-accept with filters)"""
+    try:
+        config = load_config()
+        db = Database(config)
+        session = db.get_session()
+
+        from utils.network_growth import NetworkGrowthAutomation
+        network_growth = NetworkGrowthAutomation(session, config)
+
+        console.print(f"\n[cyan]Processing incoming connection requests...[/cyan]")
+        console.print(f"Max to process: {max_requests}\n")
+
+        result = network_growth.process_incoming_requests(max_requests=max_requests)
+
+        console.print("[bold blue]Processing Results[/bold blue]")
+        console.print(f"  Total processed: {result['total_processed']}")
+        console.print(f"  Accepted: [green]{result['accepted']}[/green]")
+        console.print(f"  Declined: [red]{result['declined']}[/red]")
+        console.print(f"  Pending review: [yellow]{result['pending']}[/yellow]")
+        console.print()
+
+        if result['accepted_profiles']:
+            console.print("[bold cyan]Accepted Connections:[/bold cyan]")
+            for profile in result['accepted_profiles']:
+                console.print(f"  • {profile}")
+            console.print()
+
+        session.close()
+        db.close()
+
+    except Exception as e:
+        console.print(f"[red]Error: {e}[/red]")
+        import traceback
+        traceback.print_exc()
+
+
+@cli.command()
+def process_sequences():
+    """Process due message sequences and send scheduled messages"""
+    try:
+        config = load_config()
+        db = Database(config)
+        session = db.get_session()
+
+        from utils.network_growth import NetworkGrowthAutomation
+        network_growth = NetworkGrowthAutomation(session, config)
+
+        console.print("\n[cyan]Processing due message sequences...[/cyan]\n")
+
+        result = network_growth.process_due_sequence_messages()
+
+        console.print("[bold blue]Processing Results[/bold blue]")
+        console.print(f"  Messages sent: [green]{result['messages_sent']}[/green]")
+        console.print(f"  Failed: [red]{result['failed']}[/red]")
+        console.print(f"  Sequences completed: {result['completed_sequences']}")
+        console.print()
+
+        if result['sent_to']:
+            console.print("[bold cyan]Messages Sent To:[/bold cyan]")
+            for recipient in result['sent_to']:
+                console.print(f"  • {recipient}")
+            console.print()
+
+        session.close()
+        db.close()
+
+    except Exception as e:
+        console.print(f"[red]Error: {e}[/red]")
+        import traceback
+        traceback.print_exc()
 
 
 if __name__ == '__main__':
