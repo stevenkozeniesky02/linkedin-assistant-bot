@@ -4,28 +4,15 @@ __pycache__/
 *$py.class
 *.so
 .Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
 *.egg-info/
-.installed.cfg
+dist/
+build/
 *.egg
-MANIFEST
 
 # Virtual Environment
 venv/
 env/
 ENV/
-virtualenv/
 
 # IDE
 .vscode/
@@ -33,87 +20,44 @@ virtualenv/
 *.swp
 *.swo
 *~
-.DS_Store
-
-# Environment Variables
-.env
-.env.local
-.env.*.local
 
 # Database
 *.db
 *.sqlite
 *.sqlite3
-linkedin_assistant.db
-
-# LinkedIn Session
-linkedin_session.pkl
-cookies.pkl
 
 # Logs
 *.log
-linkedin_assistant.log
+logs/
 
-# ChromeDriver / Selenium
-chromedriver
-geckodriver
-*.crx
+# Config (keep example, ignore actual)
+config_local.yaml
+
+# Session files
+*.pkl
+linkedin_session.pkl
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Data
+data/
+*.csv
+*.json
 
 # Temporary files
 tmp/
 temp/
 *.tmp
 
-# macOS
-.DS_Store
-.AppleDouble
-.LSOverride
+# Screenshots
+screenshots/
+*.png
+*.jpg
+*.jpeg
 
-# Thumbnails
-._*
-
-# Files that might appear in the root of a volume
-.DocumentRevisions-V100
-.fseventsd
-.Spotlight-V100
-.TemporaryItems
-.Trashes
-.VolumeIcon.icns
-.com.apple.timemachine.donotpresent
-
-# Directories potentially created on remote AFP share
-.AppleDB
-.AppleDesktop
-Network Trash Folder
-Temporary Items
-.apdisk
-
-# Windows
-Thumbs.db
-ehthumbs.db
-Desktop.ini
-$RECYCLE.BIN/
-
-# Test coverage
-htmlcov/
-.tox/
-.coverage
-.coverage.*
-.cache
-nosetests.xml
-coverage.xml
-*.cover
-.hypothesis/
-.pytest_cache/
-
-# Jupyter Notebook
-.ipynb_checkpoints
-
-# pyenv
-.python-version
-
-# User-specific config (keep template)
-config.yaml
-
-# But track the example
-!config.example.yaml
+# Credentials
+.env
+credentials.json
+secrets.yaml

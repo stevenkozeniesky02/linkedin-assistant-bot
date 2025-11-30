@@ -144,6 +144,54 @@ ollama pull llama2
 
 ---
 
+## 📁 Project Structure
+
+```
+linkedin-assistant-bot/
+├── ai/                      # AI provider integrations
+│   ├── anthropic_client.py
+│   ├── gemini_client.py
+│   ├── local_llm_client.py
+│   └── openai_client.py
+├── automation_modes/        # Automation mode implementations
+│   ├── feed_engagement.py
+│   ├── post_response.py
+│   ├── connection_outreach.py
+│   └── ...
+├── database/               # Database models and utilities
+│   ├── models.py
+│   └── session.py
+├── docs/                   # Documentation
+│   └── INTEGRATION_SUMMARY.md
+├── examples/               # Example scripts and demos
+│   ├── demo_feed_engagement.py
+│   └── demo_network_graph.py
+├── linkedin/               # LinkedIn automation core
+│   ├── browser.py
+│   ├── content_generator.py
+│   └── engagement.py
+├── scripts/                # Utility scripts
+│   ├── automation_cli.py
+│   ├── autonomous_agent_v2.py
+│   ├── safety_connections_cli.py
+│   └── migrations/
+├── tests/                  # Test suite
+│   └── test_integration.py
+├── utils/                  # Utility modules
+│   ├── analytics.py
+│   ├── lead_scoring.py
+│   ├── message_sequence_engine.py
+│   ├── network_growth.py
+│   └── safety_monitor.py
+├── config.yaml            # Configuration file
+├── main.py               # Main entry point
+├── requirements.txt      # Python dependencies
+├── LICENSE              # MIT License
+└── README.md           # This file
+```
+
+---
+
 ## 📖 Usage
 
 ### Generate a Post
@@ -364,16 +412,16 @@ python main.py process-sequences
 
 ```bash
 # List all automation modes and their status
-python automation_cli.py list-modes
+python scripts/automation_cli.py list-modes
 
 # Run individual modes
-python automation_cli.py feed-engagement --duration 15
-python automation_cli.py post-response
-python automation_cli.py group-networking
-python automation_cli.py connection-outreach
+python scripts/automation_cli.py feed-engagement --duration 15
+python scripts/automation_cli.py post-response
+python scripts/automation_cli.py group-networking
+python scripts/automation_cli.py connection-outreach
 
 # Run all active modes
-python automation_cli.py run-all
+python scripts/automation_cli.py run-all
 ```
 
 **What Automation Modes Do:**
