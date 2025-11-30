@@ -166,8 +166,22 @@ class HashtagResearchEngine:
             for hashtag, metrics in hashtag_metrics.items():
                 if metrics['post_count'] >= 2:  # Require at least 2 posts
                     avg_engagement = metrics['total_engagement'] / metrics['post_count']
-                    # Trend score: combination of avg engagement and post frequency
-                    trend_score = min(100, (avg_engagement / 10) + (metrics['post_count'] * 5))
+
+                    # Calculate average views/reactions/comments for more granular scoring
+                    avg_views = metrics['views'] / metrics['post_count']
+                    avg_reactions = metrics['reactions'] / metrics['post_count']
+                    avg_comments = metrics['comments'] / metrics['post_count']
+
+                    # Trend score: weighted combination of metrics
+                    # If no analytics data exists, use frequency-based scoring
+                    if avg_engagement == 0:
+                        # Frequency-based: more usage = higher trend
+                        trend_score = min(100, 40 + (metrics['post_count'] * 10))
+                    else:
+                        # Engagement-based: views * 0.1 + reactions * 2 + comments * 5 + frequency bonus
+                        engagement_score = (avg_views * 0.1) + (avg_reactions * 2) + (avg_comments * 5)
+                        frequency_bonus = metrics['post_count'] * 3
+                        trend_score = min(100, engagement_score + frequency_bonus)
 
                     scored_hashtags.append((
                         hashtag,
@@ -177,7 +191,10 @@ class HashtagResearchEngine:
                             'trend_score': trend_score,
                             'total_views': metrics['views'],
                             'total_reactions': metrics['reactions'],
-                            'total_comments': metrics['comments']
+                            'total_comments': metrics['comments'],
+                            'avg_views': avg_views,
+                            'avg_reactions': avg_reactions,
+                            'avg_comments': avg_comments
                         }
                     ))
 
