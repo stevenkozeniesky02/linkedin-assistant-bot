@@ -26,9 +26,19 @@ class FeedEngagementMode(AutomationMode):
 
         # Feed engagement settings
         self.scroll_duration = self.config.get('scroll_duration_minutes', 15)
-        self.max_likes = self.config.get('max_likes_per_session', 10)
-        self.max_comments = self.config.get('max_comments_per_session', 3)
-        self.max_shares = self.config.get('max_shares_per_session', 1)
+
+        # Engagement strategy presets
+        strategy = self.config.get('engagement_strategy', 'balanced')
+        self._apply_engagement_strategy(strategy)
+
+        # Manual overrides (if specified in config)
+        if 'max_likes_per_session' in self.config:
+            self.max_likes = self.config['max_likes_per_session']
+        if 'max_comments_per_session' in self.config:
+            self.max_comments = self.config['max_comments_per_session']
+        if 'max_shares_per_session' in self.config:
+            self.max_shares = self.config['max_shares_per_session']
+
         self.max_skips_before_engage = self.config.get('max_skips_before_engage', 8)
         self.target_keywords = self.config.get('target_keywords', [])
         self.avoid_keywords = self.config.get('avoid_keywords', [])
@@ -38,6 +48,46 @@ class FeedEngagementMode(AutomationMode):
         self.comments_count = 0
         self.shares_count = 0
         self.consecutive_skips = 0
+
+    def _apply_engagement_strategy(self, strategy: str):
+        """
+        Apply engagement strategy presets
+
+        Args:
+            strategy: 'conservative', 'balanced', or 'aggressive'
+        """
+        strategies = {
+            'conservative': {
+                'likes': 5,
+                'comments': 2,
+                'shares': 0,
+                'description': 'Safest, looks most human'
+            },
+            'balanced': {
+                'likes': 15,
+                'comments': 5,
+                'shares': 2,
+                'description': 'Moderate engagement'
+            },
+            'aggressive': {
+                'likes': 30,
+                'comments': 10,
+                'shares': 5,
+                'description': 'High engagement, higher risk'
+            }
+        }
+
+        if strategy not in strategies:
+            self.logger.warning(f"Unknown strategy '{strategy}', using 'balanced'")
+            strategy = 'balanced'
+
+        preset = strategies[strategy]
+        self.max_likes = preset['likes']
+        self.max_comments = preset['comments']
+        self.max_shares = preset['shares']
+
+        self.logger.info(f"Engagement strategy: {strategy} - {preset['description']}")
+        self.logger.info(f"Limits: {self.max_likes} likes, {self.max_comments} comments, {self.max_shares} shares")
 
     def validate_config(self) -> bool:
         """Validate configuration"""
@@ -55,7 +105,9 @@ class FeedEngagementMode(AutomationMode):
             self.logger.warning("LinkedIn client not available - simulation mode")
             return self._simulate_engagement()
 
+        strategy = self.config.get('engagement_strategy', 'balanced')
         print(f"📱 Opening LinkedIn feed... ready to engage for {self.scroll_duration} minutes")
+        print(f"🎯 Strategy: {strategy.upper()} ({self.max_likes} likes, {self.max_comments} comments, {self.max_shares} shares max)")
 
         # Reset counters
         self.likes_count = 0

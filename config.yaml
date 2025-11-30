@@ -281,9 +281,20 @@ automation_modes:
   feed_engagement:
     enabled: true
     scroll_duration_minutes: 15
-    max_likes_per_session: 10
-    max_comments_per_session: 3
-    max_shares_per_session: 1
+
+    # Engagement Strategy: conservative, balanced, aggressive
+    # This controls how actively the bot engages with posts
+    engagement_strategy: balanced
+
+    # Conservative: 5 likes, 2 comments, 0 shares (safest, looks most human)
+    # Balanced: 15 likes, 5 comments, 2 shares (moderate engagement)
+    # Aggressive: 30 likes, 10 comments, 5 shares (high engagement, higher risk)
+
+    # Manual override (leave commented to use strategy presets)
+    # max_likes_per_session: 15
+    # max_comments_per_session: 5
+    # max_shares_per_session: 2
+
     engagement_frequency: daily  # daily, twice_daily, hourly
     max_skips_before_engage: 8  # Engage with next post after skipping this many
     target_keywords:
