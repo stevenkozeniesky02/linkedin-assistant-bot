@@ -1,0 +1,473 @@
+ai_provider: local
+analytics:
+  metrics_to_track:
+  - views
+  - reactions
+  - comments
+  - shares
+  - profile_views
+  min_data_points: 10
+  optimize_content: true
+  track_metrics: true
+anthropic:
+  max_tokens: 1000
+  model: claude-3-sonnet-20240229
+autonomous_agent:
+  auto_post_scheduled: true
+  check_interval: 300
+  enable_engagement: true
+  engagement_strategy: balanced
+  max_delay_between_actions: 120
+  max_engagements_per_cycle: 3
+  max_replies_per_cycle: 5
+  min_delay_between_actions: 30
+  random_delays: true
+  reply_to_comments: true
+content:
+  default_post_length: medium
+  include_emojis: true
+  include_hashtags: true
+  max_hashtags: 5
+  post_types:
+  - insight
+  - achievement
+  - question
+  - how-to
+  - story
+  tone: professional
+  topics:
+  - software development
+  - artificial intelligence
+  - career growth
+  - technology trends
+database:
+  path: linkedin_assistant.db
+  type: sqlite
+engagement:
+  comment_tone: supportive
+  enable_auto_comments: true
+  engage_with:
+  - connections
+  - industry_leaders
+  - trending_posts
+  groups_to_find:
+  - AI
+  - Software Engineering
+  - Tech Leadership
+  join_groups: true
+  max_comments_per_day: 10
+  max_groups: 20
+  skip_corporate_brands:
+  - Wells Fargo
+  - Bank of America
+  - Chase
+  - Citibank
+  - Goldman Sachs
+  - Morgan Stanley
+  - JPMorgan
+  skip_promotional: true
+gemini:
+  model: gemini-pro
+  temperature: 0.7
+linkedin:
+  browser: chrome
+  headless: false
+  max_delay_between_actions: 120
+  min_delay_between_actions: 30
+  save_session: true
+  session_file: linkedin_session.pkl
+local_llm:
+  base_url: http://localhost:11434
+  model: llama2
+  temperature: 0.7
+network_growth:
+  # Enable LinkedIn automation (browser will launch)
+  # WARNING: Set to false for simulation mode (no browser, testing only)
+  use_automation: true
+
+  # Connection request settings
+  max_requests_per_day: 10
+  personalize_requests: true
+
+  # Lead Scoring Settings (0-100 scale)
+  use_lead_scoring: true
+  min_lead_score: 40  # Minimum score to send request (0-100)
+
+  # Target Companies (high priority for lead scoring)
+  target_companies:
+    # Big Tech / FAANG+
+    - Google
+    - Meta
+    - Amazon
+    - Apple
+    - Microsoft
+    - Netflix
+    - Tesla
+    # AI/ML Leaders
+    - OpenAI
+    - Anthropic
+    - DeepMind
+    - Cohere
+    - Hugging Face
+    - Scale AI
+    - Databricks
+    # Cloud & Infrastructure
+    - Snowflake
+    - MongoDB
+    - Stripe
+    - Twilio
+    - Cloudflare
+    - Datadog
+    # Enterprise Software
+    - Salesforce
+    - ServiceNow
+    - Workday
+    - Adobe
+    - Oracle
+    - SAP
+    # Fast-Growing Tech
+    - Airbnb
+    - Uber
+    - Lyft
+    - DoorDash
+    - Instacart
+    - Shopify
+    - Square
+    - Coinbase
+    # Social & Communication
+    - LinkedIn
+    - Slack
+    - Zoom
+    - Discord
+    - Notion
+    - Figma
+    # Analytics & Data
+    - Tableau
+    - Palantir
+    - Splunk
+    - Amplitude
+    - Mixpanel
+    # Consulting & Services
+    - McKinsey
+    - Bain
+    - BCG
+    - Deloitte
+    - Accenture
+    - KPMG
+
+  # Target Titles/Roles (keywords to match in job titles)
+  target_titles:
+    # Executive/Leadership
+    - Chief Technology Officer
+    - CTO
+    - Chief Data Officer
+    - CDO
+    - VP Engineering
+    - VP Product
+    - VP Data
+    - VP Analytics
+    - Head of Engineering
+    - Head of Data
+    - Head of AI
+    - Head of Machine Learning
+    - Director of Engineering
+    - Director of Data Science
+    - Director of Analytics
+    # Management
+    - Engineering Manager
+    - Engineering Lead
+    - Tech Lead
+    - Product Manager
+    - Senior Product Manager
+    - Product Lead
+    - Data Science Manager
+    - Analytics Manager
+    - ML Manager
+    - AI Manager
+    # Individual Contributors (Senior+)
+    - Staff Engineer
+    - Principal Engineer
+    - Senior Software Engineer
+    - Senior Data Scientist
+    - Senior Data Engineer
+    - Senior ML Engineer
+    - Senior AI Engineer
+    - Lead Data Scientist
+    - Lead Engineer
+    - Architect
+    - Solutions Architect
+    - Data Architect
+    # Specialized Roles
+    - Machine Learning Engineer
+    - ML Engineer
+    - AI Engineer
+    - Data Scientist
+    - Data Engineer
+    - Analytics Engineer
+    - Research Scientist
+    - Applied Scientist
+    - AI Researcher
+    - ML Researcher
+    # Product & Strategy
+    - Product Owner
+    - Technical Product Manager
+    - Growth Product Manager
+    - Data Product Manager
+    # DevOps & Infrastructure
+    - DevOps Engineer
+    - Site Reliability Engineer
+    - SRE
+    - Platform Engineer
+    - Infrastructure Engineer
+
+  # Target Industries (for lead scoring)
+  target_industries:
+    - Computer Software
+    - Internet
+    - Information Technology
+    - Information Technology & Services
+    - Technology
+    - Artificial Intelligence
+    - Machine Learning
+    - Data Science
+    - Cloud Computing
+    - SaaS
+    - Computer & Network Security
+    - Cybersecurity
+    - Financial Services
+    - FinTech
+    - E-learning
+    - EdTech
+    - Healthcare Technology
+    - HealthTech
+    - Telecommunications
+    - Consulting
+
+  # Auto-accept settings (requires use_automation: true)
+  auto_accept_enabled: false
+  auto_accept_criteria:
+    industries:
+      - Computer Software
+      - Internet
+      - Information Technology
+      - Artificial Intelligence
+    title_keywords:
+      - Engineer
+      - Manager
+      - Developer
+      - Scientist
+      - Analyst
+      - Product
+    companies: []  # Empty = all companies accepted (or specify list)
+    min_mutual_connections: 2
+
+  # Message sequence settings
+  auto_enroll_new_connections: true
+  use_sequence_ab_testing: true
+  use_behavioral_triggers: true
+  use_timezone_scheduling: true
+
+# Automation Modes Configuration
+automation_modes:
+  # Full automation runs all enabled modes with smart scheduling
+  full_automation: false
+
+  # Active modes (can enable multiple)
+  active_modes:
+    - feed_engagement
+    - post_response
+
+  # Mode-specific configurations
+  feed_engagement:
+    enabled: true
+    scroll_duration_minutes: 15
+    max_likes_per_session: 10
+    max_comments_per_session: 3
+    max_shares_per_session: 1
+    engagement_frequency: daily  # daily, twice_daily, hourly
+    max_skips_before_engage: 8  # Engage with next post after skipping this many
+    target_keywords:
+      # AI/ML terms
+      - artificial intelligence
+      - machine learning
+      - AI
+      - ML
+      - deep learning
+      - neural network
+      - data science
+      - analytics
+      # Tech/Programming
+      - software development
+      - programming
+      - coding
+      - developer
+      - engineer
+      - python
+      - javascript
+      - typescript
+      - react
+      - node
+      # Career/Professional
+      - tech
+      - technology
+      - startup
+      - innovation
+      - product
+      - remote work
+      - career
+      - job
+      - hiring
+    avoid_keywords:
+      - politics
+      - religion
+
+  group_networking:
+    enabled: false
+    max_groups: 20
+    max_comments_per_group: 2
+    connection_requests_from_groups: 5
+    daily_group_limit: 3  # Max groups to join per day
+    groups_to_find:
+      - AI
+      - Software Engineering
+      - Tech Leadership
+      - Data Science
+
+  post_response:
+    enabled: true
+    check_interval_minutes: 60
+    auto_reply: true
+    reply_delay_range: [30, 180]  # seconds
+    max_replies_per_check: 5
+    prioritize_influencers: true  # Reply to verified/influential users first
+
+  connection_outreach:
+    enabled: true
+    max_requests_per_day: 10
+    follow_up_sequence: true
+    follow_up_delay_days: 3
+    target_titles:
+      - Software Engineer
+      - Data Scientist
+      - Engineering Manager
+      - Tech Lead
+    target_industries:
+      - Technology
+      - Software Development
+
+  influencer_engagement:
+    enabled: false
+    max_influencers: 50
+    engagement_per_influencer: 3  # likes/comments per week
+    early_engagement: true  # Engage within first hour of post
+    influencer_criteria:
+      min_followers: 10000
+      verified_only: false
+    industries:
+      - Technology
+      - AI/ML
+
+  job_market_research:
+    enabled: false
+    track_companies:
+      - Google
+      - Meta
+      - OpenAI
+      - Anthropic
+    job_title_keywords:
+      - Machine Learning
+      - AI Engineer
+      - Data Scientist
+    engage_with_recruiters: true
+    max_engagements_per_day: 5
+
+  direct_messaging:
+    enabled: false
+    max_messages_per_day: 10
+    message_sequences:
+      - warm_intro
+      - follow_up
+      - value_add
+    personalize_with_ai: true
+    track_responses: true
+
+  content_repurposing:
+    enabled: false
+    repost_top_performers: true
+    repost_delay_days: 30
+    performance_threshold: 100  # Min reactions to qualify
+    adapt_format: true  # Rewrite for freshness
+
+  passive_listening:
+    enabled: false
+    monitor_keywords:
+      - machine learning jobs
+      - AI opportunities
+      - tech hiring
+    monitor_companies:
+      - competitors
+      - dream_companies
+    alert_on_mentions: true
+    track_trends: true
+
+  # Smart Scheduling
+  scheduler:
+    enabled: true
+    mode_rotation: balanced  # balanced, aggressive, conservative
+    time_windows:
+      morning: [8, 11]    # 8am-11am
+      midday: [12, 14]    # 12pm-2pm
+      evening: [17, 20]   # 5pm-8pm
+    preferred_times:
+      feed_engagement: [morning, evening]
+      post_response: [morning, midday, evening]
+      connection_outreach: [morning]
+      influencer_engagement: [morning]
+
+  # Safety & Rate Limiting
+  safety:
+    max_actions_per_hour: 15
+    max_actions_per_day: 100
+    human_like_delays: true
+    delay_range: [5, 30]  # seconds between actions
+    pause_on_errors: true
+    error_threshold: 3  # Pause mode after X errors
+logging:
+  console: true
+  file: linkedin_assistant.log
+  level: INFO
+openai:
+  max_tokens: 1000
+  model: gpt-4
+  temperature: 0.7
+safety:
+  avoid_topics:
+  - politics
+  - religion
+  - controversial
+  max_actions_per_hour: 5
+  max_posts_per_day: 3
+  min_time_between_similar_posts: 7
+  prevent_duplicate_content: true
+  require_approval: true
+schedule:
+  engagement_frequency: daily
+  posting_days:
+  - 1
+  - 2
+  - 3
+  - 4
+  - 5
+  posting_times:
+  - 08:00
+  - '12:00'
+  - '17:00'
+user_profile:
+  background: Experienced in Python and AI/ML
+  industry: Technology
+  interests:
+  - artificial intelligence
+  - automation
+  - software development
+  name: Steven
+  title: Data Analyst

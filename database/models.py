@@ -656,3 +656,23 @@ class TestAssignment(Base):
 
     def __repr__(self):
         return f"<TestAssignment(id={self.id}, test_id={self.test_id}, variant_id={self.variant_id}, post_id={self.post_id})>"
+
+
+class HashtagPerformance(Base):
+    """Model for tracking hashtag performance across posts"""
+    __tablename__ = 'hashtag_performance'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+
+    # Association
+    post_id = Column(Integer, ForeignKey('posts.id'), nullable=False)
+    hashtag = Column(String(100), nullable=False)  # Hashtag without # symbol
+
+    # Tracking
+    recorded_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    post = relationship("Post")
+
+    def __repr__(self):
+        return f"<HashtagPerformance(id={self.id}, post_id={self.post_id}, hashtag='#{self.hashtag}')>"

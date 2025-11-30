@@ -45,11 +45,15 @@
 - **Interactive Mode** - Regenerate comments or switch posts without restarting
 - **Quality Filtering** - Skips corporate brands, promotional content, duplicates
 
-### 📊 Analytics & Insights
+### 📊 Analytics & Content Strategy
 - **Performance Tracking** - Monitor views, reactions, comments, shares
 - **Topic Analysis** - Identify which topics resonate with your audience
 - **Tone & Length Optimization** - Discover what style works best for you
 - **Historical Trends** - Track growth and engagement over time
+- **Hashtag Research** - AI-powered trending hashtag discovery based on your industry
+- **Content Ideas Generator** - Get AI-generated content ideas tailored to your niche
+- **Posting Schedule Optimizer** - Learn the best times and days to post
+- **Best Performing Analysis** - See which content types drive the most engagement
 
 ### 🛡️ Safety & Ban Prevention
 - **Activity Monitoring** - Tracks all LinkedIn actions with risk scoring
@@ -427,6 +431,38 @@ python scripts/automation_cli.py run-all
 **What Automation Modes Do:**
 - **Feed Engagement**: Scrolls through feed, likes/comments on relevant posts based on keywords
 - **Post Response**: Monitors your posts for new comments and auto-replies
+
+###  Content Research & Strategy
+
+AI-powered content research to optimize your LinkedIn strategy.
+
+```bash
+# Research trending hashtags for your industry
+python scripts/content_research_cli.py hashtags --industry "Technology" --days 30
+
+# Get hashtag recommendations for specific content
+python scripts/content_research_cli.py hashtags-for-content "Just shipped a new AI feature..."
+
+# Analyze your content performance
+python scripts/content_research_cli.py analyze-performance --days 90
+
+# Generate content ideas
+python scripts/content_research_cli.py content-ideas --num 5
+
+# Get recommended posting schedule
+python scripts/content_research_cli.py posting-schedule
+
+# View best performing hashtags
+python scripts/content_research_cli.py best-hashtags --days 90
+```
+
+**What Content Research Does:**
+- **Hashtag Discovery**: Finds trending hashtags based on your industry and historical performance
+- **AI Hashtag Generation**: Uses AI to recommend optimal hashtags for your specific content
+- **Performance Analysis**: Analyzes which content types, topics, and posting times work best
+- **Content Ideas**: Generates AI-powered content ideas tailored to your industry
+- **Posting Optimization**: Recommends optimal days, times, and content mix
+- **Historical Tracking**: Tracks hashtag performance across all your posts
 - **Group Networking**: Joins groups, engages with discussions, sends connection requests
 - **Connection Outreach**: Sends targeted connection requests with AI messages
 - More modes available - see `config.yaml` for full list and configuration
