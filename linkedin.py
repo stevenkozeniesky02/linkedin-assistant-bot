@@ -121,7 +121,22 @@ def main():
             console.print(f"Automation: {'Enabled' if config.get('network_growth', {}).get('use_automation') else 'Disabled'}")
             console.print(f"Active Modes: {', '.join(config.get('automation_modes', {}).get('active_modes', []))}")
             console.print(f"AI Provider: {config.get('ai_provider')}")
+
+            # Show engagement strategy
+            strategy = config.get('automation_modes', {}).get('feed_engagement', {}).get('engagement_strategy', 'balanced')
+            console.print(f"\n[bold]Feed Engagement Strategy:[/bold] {strategy.upper()}")
+
+            # Show limits based on strategy
+            strategies = {
+                'conservative': '5 likes, 2 comments, 0 shares (safest)',
+                'balanced': '15 likes, 5 comments, 2 shares (moderate)',
+                'aggressive': '30 likes, 10 comments, 5 shares (high risk)'
+            }
+            if strategy in strategies:
+                console.print(f"  {strategies[strategy]}")
+
             console.print("\n[yellow]Edit config.yaml to change settings[/yellow]")
+            console.print("[dim]  engagement_strategy: conservative | balanced | aggressive[/dim]")
             input("\nPress Enter to continue...")
         elif choice == "Q":
             clear()
