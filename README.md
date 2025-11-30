@@ -87,6 +87,15 @@
 - **Sequence Templates** - Pre-built sequences (welcome, follow_up) or create custom
 - **Full SafetyMonitor Integration** - Rate limiting on all connection activities
 
+### 🎨 Profile Optimization Tools
+- **Profile Audit & Scoring** - Comprehensive analysis of your LinkedIn profile with 0-100 scoring
+- **AI Headline Generator** - Create optimized, keyword-rich headlines (40-120 chars)
+- **AI Summary Rewriter** - Generate compelling About sections with achievements and CTAs
+- **Skills Recommendations** - Get personalized skill suggestions based on your industry and role
+- **Keyword Optimization** - Industry-specific keyword analysis for better searchability
+- **Section-by-Section Analysis** - Detailed breakdowns for headline, summary, experience, and skills
+- **Actionable Recommendations** - Prioritized suggestions to improve your profile score
+
 ---
 
 ## 🚦 Quick Start
@@ -539,6 +548,66 @@ python main.py ab-test --action recommendations --test-id 1
 - P-value and lift calculations
 - Confidence intervals for each variant
 - Automated winner selection
+
+### Profile Optimization
+
+Optimize your LinkedIn profile for maximum visibility and impact.
+
+```bash
+# Analyze your profile with comprehensive scoring
+python scripts/profile_optimizer_cli.py analyze --profile my_profile.json
+
+# Generate an optimized headline
+python scripts/profile_optimizer_cli.py generate-headline \
+  --role "Software Engineer" \
+  --industry "Technology" \
+  --skills "Python,JavaScript,React,AWS"
+
+# Generate an optimized summary/about section
+python scripts/profile_optimizer_cli.py generate-summary \
+  --role "Data Scientist" \
+  --industry "Artificial Intelligence" \
+  --achievements "Built ML models|Led team of 5|Published 3 papers" \
+  --skills "Python,TensorFlow,PyTorch,SQL"
+
+# Get personalized skill recommendations
+python scripts/profile_optimizer_cli.py recommend-skills \
+  --role "Software Engineer" \
+  --skills "Python,JavaScript,React" \
+  --num 10
+```
+
+**Profile Structure (JSON):**
+```json
+{
+  "headline": "Your current headline",
+  "summary": "Your current About section text",
+  "industry": "Technology",
+  "experience": [
+    {
+      "title": "Software Engineer",
+      "company": "Tech Corp",
+      "description": "Built scalable systems using Python and AWS..."
+    }
+  ],
+  "skills": ["Python", "JavaScript", "React", "AWS"]
+}
+```
+
+**What Profile Optimization Does:**
+- **Profile Audit**: Comprehensive 0-100 scoring across headline, summary, experience, and skills
+- **Keyword Analysis**: Industry-specific keyword optimization for LinkedIn search
+- **AI Generation**: Creates optimized headlines and summaries using AI
+- **Skills Recommendations**: Suggests missing skills categorized by priority (high/medium/nice-to-have)
+- **Actionable Insights**: Provides prioritized recommendations to improve your score
+- **Section Breakdown**: Detailed analysis of length, keywords, achievements, and formatting
+
+**Scoring System:**
+- Headline (25%): Length, keywords, value proposition
+- Summary (30%): Length, keywords, CTA, achievements, formatting
+- Experience (25%): Entry count, keywords, quantifiable achievements
+- Skills (15%): Skill count, industry relevance
+- Overall (5%): Completeness and quality
 
 ---
 
