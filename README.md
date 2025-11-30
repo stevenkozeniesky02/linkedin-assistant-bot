@@ -92,6 +92,7 @@
 - **AI Headline Generator** - Create optimized, keyword-rich headlines (40-120 chars)
 - **AI Summary Rewriter** - Generate compelling About sections with achievements and CTAs
 - **Skills Recommendations** - Get personalized skill suggestions based on your industry and role
+- **Profile Comparison vs Competitors** - Competitive analysis against similar professionals with percentile ranking
 - **Keyword Optimization** - Industry-specific keyword analysis for better searchability
 - **Section-by-Section Analysis** - Detailed breakdowns for headline, summary, experience, and skills
 - **Actionable Recommendations** - Prioritized suggestions to improve your profile score
@@ -575,6 +576,11 @@ python scripts/profile_optimizer_cli.py recommend-skills \
   --role "Software Engineer" \
   --skills "Python,JavaScript,React" \
   --num 10
+
+# Compare your profile against competitors
+python scripts/profile_optimizer_cli.py compare \
+  --my-profile my_profile.json \
+  --competitor-profiles competitor1.json competitor2.json competitor3.json
 ```
 
 **Profile Structure (JSON):**
@@ -599,6 +605,9 @@ python scripts/profile_optimizer_cli.py recommend-skills \
 - **Keyword Analysis**: Industry-specific keyword optimization for LinkedIn search
 - **AI Generation**: Creates optimized headlines and summaries using AI
 - **Skills Recommendations**: Suggests missing skills categorized by priority (high/medium/nice-to-have)
+- **Competitive Analysis**: Compare your profile against competitors with percentile ranking and gap analysis
+- **Skill Gap Analysis**: Identifies common, missing, and unique skills compared to competitors
+- **Competitive Recommendations**: Get actionable suggestions based on competitive positioning
 - **Actionable Insights**: Provides prioritized recommendations to improve your score
 - **Section Breakdown**: Detailed analysis of length, keywords, achievements, and formatting
 

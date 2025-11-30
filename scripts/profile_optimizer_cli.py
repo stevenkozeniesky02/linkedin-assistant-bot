@@ -7,6 +7,7 @@ Usage:
   python profile_optimizer_cli.py generate-headline --role "Software Engineer" --industry "Technology"
   python profile_optimizer_cli.py generate-summary --role "Data Scientist" --industry "Data Science"
   python profile_optimizer_cli.py recommend-skills --role "Software Engineer" --skills "Python,JavaScript" --num 10
+  python profile_optimizer_cli.py compare --my-profile my_profile.json --competitor-profiles comp1.json comp2.json comp3.json
 """
 
 import sys
@@ -305,6 +306,103 @@ def cmd_recommend_skills(args, config, ai_client):
         print()
 
 
+def cmd_compare(args, config, ai_client):
+    """Compare your profile against competitors"""
+    print("\n⚖️  Profile Comparison vs Competitors\n")
+
+    optimizer = ProfileOptimizer(ai_client, config)
+
+    # Load my profile
+    my_profile_path = Path(args.my_profile)
+    if not my_profile_path.exists():
+        print(f"❌ Your profile file not found: {args.my_profile}\n")
+        return
+
+    with open(my_profile_path, 'r') as f:
+        my_profile = json.load(f)
+
+    # Load competitor profiles
+    competitor_profiles = []
+    for comp_path in args.competitor_profiles:
+        comp_path_obj = Path(comp_path)
+        if not comp_path_obj.exists():
+            print(f"⚠️  Skipping missing file: {comp_path}")
+            continue
+        with open(comp_path_obj, 'r') as f:
+            competitor_profiles.append(json.load(f))
+
+    if not competitor_profiles:
+        print("❌ No valid competitor profiles found\n")
+        return
+
+    print(f"Comparing your profile against {len(competitor_profiles)} competitors...\n")
+
+    # Compare profiles
+    comparison = optimizer.compare_profiles(my_profile, competitor_profiles)
+
+    # Display results
+    print("📊 Overall Comparison:")
+    print(f"   Your Score: {comparison['my_score']}/100")
+    print(f"   Competitor Average: {comparison['competitor_average']:.1f}/100")
+    print(f"   Gap: {comparison['gap']:+.1f} points")
+    print(f"   Percentile: {comparison['percentile']:.0f}th (better than {comparison['better_than']}/{comparison['total_compared']} competitors)\n")
+
+    # Competitive position
+    if comparison['percentile'] >= 75:
+        print("🟢 Strong Position - You're in the top 25%\n")
+    elif comparison['percentile'] >= 50:
+        print("🟡 Average Position - Room for improvement\n")
+    else:
+        print("🔴 Weak Position - Significant improvements needed\n")
+
+    # Section comparison
+    print("📋 Section-by-Section Comparison:")
+    for section in ['headline', 'summary', 'experience', 'skills']:
+        gap = comparison['section_gaps'][section]
+        avg = comparison['section_averages'][section]
+        icon = "✅" if gap > 0 else "❌"
+        print(f"   {icon} {section.title()}: {gap:+.1f} (avg: {avg:.1f})")
+    print()
+
+    # Strengths
+    if comparison['strengths']:
+        print("💪 Your Strengths:")
+        for strength in comparison['strengths']:
+            print(f"   • {strength}")
+        print()
+
+    # Weaknesses
+    if comparison['weaknesses']:
+        print("⚠️  Your Weaknesses:")
+        for weakness in comparison['weaknesses']:
+            print(f"   • {weakness}")
+        print()
+
+    # Skill comparison
+    skill_comp = comparison['skill_comparison']
+    print("🎯 Skills Analysis:")
+    print(f"   Common skills: {skill_comp['common_skills']}")
+    print(f"   Missing skills: {skill_comp['missing_skills']}")
+    print(f"   Unique skills: {skill_comp['unique_skills']}")
+
+    if skill_comp['top_missing']:
+        print(f"\n   Top skills competitors have that you don't:")
+        for skill in skill_comp['top_missing'][:5]:
+            print(f"      • {skill}")
+
+    if skill_comp['top_unique']:
+        print(f"\n   Your unique skills (competitors don't have):")
+        for skill in skill_comp['top_unique'][:5]:
+            print(f"      • {skill}")
+    print()
+
+    # Recommendations
+    print("💡 Competitive Recommendations:")
+    for i, rec in enumerate(comparison['recommendations'], 1):
+        print(f"   {rec}")
+    print()
+
+
 def main():
     parser = argparse.ArgumentParser(
         description='LinkedIn Profile Optimizer',
@@ -339,6 +437,11 @@ def main():
     skills_parser.add_argument('--skills', type=str, help='Comma-separated current skills')
     skills_parser.add_argument('--num', type=int, default=10, help='Number of AI suggestions (default: 10)')
 
+    # Compare profiles
+    compare_parser = subparsers.add_parser('compare', help='Compare your profile vs competitors')
+    compare_parser.add_argument('--my-profile', type=str, required=True, help='Path to your profile JSON')
+    compare_parser.add_argument('--competitor-profiles', type=str, nargs='+', required=True, help='Paths to competitor profile JSON files')
+
     args = parser.parse_args()
 
     if not args.command:
@@ -358,7 +461,8 @@ def main():
         'analyze': cmd_analyze,
         'generate-headline': cmd_generate_headline,
         'generate-summary': cmd_generate_summary,
-        'recommend-skills': cmd_recommend_skills
+        'recommend-skills': cmd_recommend_skills,
+        'compare': cmd_compare
     }
 
     if args.command in commands:

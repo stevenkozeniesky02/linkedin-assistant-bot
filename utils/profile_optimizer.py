@@ -597,3 +597,109 @@ Example: Docker, Kubernetes, TypeScript, CI/CD, System Design"""
         }
 
         return all_recommendations
+
+    def compare_profiles(self, my_profile: Dict, competitor_profiles: List[Dict]) -> Dict:
+        """
+        Compare your profile against competitor profiles.
+
+        Args:
+            my_profile: Your profile data
+            competitor_profiles: List of competitor profile data dictionaries
+
+        Returns:
+            Dictionary with comparison results and recommendations
+        """
+        logger.info(f"Comparing profile against {len(competitor_profiles)} competitors")
+
+        # Analyze your profile
+        my_analysis = self.analyze_profile(my_profile)
+
+        # Analyze competitor profiles
+        competitor_analyses = []
+        for comp_profile in competitor_profiles:
+            comp_analysis = self.analyze_profile(comp_profile)
+            competitor_analyses.append(comp_analysis)
+
+        # Calculate averages across competitors
+        avg_scores = {
+            'overall': sum(c['overall_score'] for c in competitor_analyses) / len(competitor_analyses),
+            'headline': sum(c['headline']['score'] for c in competitor_analyses) / len(competitor_analyses),
+            'summary': sum(c['summary']['score'] for c in competitor_analyses) / len(competitor_analyses),
+            'experience': sum(c['experience']['score'] for c in competitor_analyses) / len(competitor_analyses),
+            'skills': sum(c['skills']['score'] for c in competitor_analyses) / len(competitor_analyses)
+        }
+
+        # Calculate gaps
+        gaps = {
+            'overall': my_analysis['overall_score'] - avg_scores['overall'],
+            'headline': my_analysis['headline']['score'] - avg_scores['headline'],
+            'summary': my_analysis['summary']['score'] - avg_scores['summary'],
+            'experience': my_analysis['experience']['score'] - avg_scores['experience'],
+            'skills': my_analysis['skills']['score'] - avg_scores['skills']
+        }
+
+        # Analyze competitive positioning
+        better_than_count = sum(1 for c in competitor_analyses if my_analysis['overall_score'] > c['overall_score'])
+        percentile = (better_than_count / len(competitor_analyses)) * 100
+
+        # Find strengths and weaknesses
+        strengths = []
+        weaknesses = []
+
+        for section, gap in gaps.items():
+            if section == 'overall':
+                continue
+            if gap > 10:
+                strengths.append(f"{section.title()}: {gap:+.1f} points above average")
+            elif gap < -10:
+                weaknesses.append(f"{section.title()}: {gap:+.1f} points below average")
+
+        # Skill comparison
+        my_skills = set(s.lower() for s in my_profile.get('skills', []))
+        competitor_skills = set()
+        for comp_profile in competitor_profiles:
+            competitor_skills.update(s.lower() for s in comp_profile.get('skills', []))
+
+        common_skills = my_skills & competitor_skills
+        missing_skills = competitor_skills - my_skills
+        unique_skills = my_skills - competitor_skills
+
+        # Generate competitive recommendations
+        recommendations = []
+
+        if percentile < 50:
+            recommendations.append(f"⚠️ Your profile ranks in the bottom {100-percentile:.0f}% - significant improvements needed")
+        elif percentile > 75:
+            recommendations.append(f"✅ Your profile ranks in the top {100-percentile:.0f}% - well done!")
+
+        for weakness in weaknesses[:3]:
+            recommendations.append(f"🔴 Improve: {weakness}")
+
+        if missing_skills:
+            top_missing = sorted(missing_skills)[:5]
+            recommendations.append(f"💡 Add these competitor skills: {', '.join(top_missing)}")
+
+        if len(my_profile.get('experience', [])) < sum(len(c.get('experience', [])) for c in competitor_profiles) / len(competitor_profiles):
+            recommendations.append("📋 Competitors have more experience entries on average")
+
+        return {
+            'my_score': my_analysis['overall_score'],
+            'competitor_average': avg_scores['overall'],
+            'gap': gaps['overall'],
+            'percentile': percentile,
+            'better_than': better_than_count,
+            'total_compared': len(competitor_analyses),
+            'section_gaps': gaps,
+            'section_averages': avg_scores,
+            'strengths': strengths,
+            'weaknesses': weaknesses,
+            'skill_comparison': {
+                'common_skills': len(common_skills),
+                'missing_skills': len(missing_skills),
+                'unique_skills': len(unique_skills),
+                'top_missing': sorted(missing_skills)[:10],
+                'top_unique': sorted(unique_skills)[:10]
+            },
+            'recommendations': recommendations,
+            'my_analysis': my_analysis
+        }
