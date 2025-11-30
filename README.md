@@ -618,6 +618,41 @@ python scripts/profile_optimizer_cli.py compare \
 - Skills (15%): Skill count, industry relevance
 - Overall (5%): Completeness and quality
 
+### Network Visualization & Reporting
+
+Visualize your LinkedIn network and generate professional PDF reports.
+
+```bash
+# Generate interactive network visualization
+python scripts/reporting_cli.py network-graph --output network.html
+
+# View network statistics
+python scripts/reporting_cli.py network-stats
+
+# Identify key connectors in your network
+python scripts/reporting_cli.py key-connectors --top 15
+
+# Generate PDF performance report
+python scripts/reporting_cli.py pdf-report --weeks 4 --output monthly_report.pdf
+```
+
+**Network Visualization Features:**
+- **Interactive Network Graph**: Explore your connections with an interactive HTML visualization
+- **Company Clustering**: Automatically groups connections by company
+- **Quality-Based Sizing**: Node sizes reflect connection quality scores
+- **Engagement Color Coding**: Green (high), Orange (medium), Red (low), Purple (target audience)
+- **Key Connector Analysis**: Identifies influential connections using betweenness centrality
+- **Network Statistics**: Total connections, companies, engagement distribution, network density
+- **Physics Simulation**: Dynamic graph layout with customizable physics
+
+**PDF Report Features:**
+- **Executive Summary**: Key metrics at a glance (posts, views, engagement, connections)
+- **Content Performance**: Breakdown by tone and length
+- **Network Growth**: Connection growth and quality metrics
+- **Top Performing Posts**: Your best content ranked by views and engagement
+- **Professional Design**: Clean, LinkedIn-branded PDF layout
+- **Weekly or Monthly**: Flexible reporting periods (1-52 weeks)
+
 ---
 
 ## ⚙️ Configuration

@@ -676,3 +676,101 @@ class HashtagPerformance(Base):
 
     def __repr__(self):
         return f"<HashtagPerformance(id={self.id}, post_id={self.post_id}, hashtag='#{self.hashtag}')>"
+
+
+class Competitor(Base):
+    """Model for tracking competitors on LinkedIn"""
+    __tablename__ = 'competitors'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+
+    # Profile information
+    name = Column(String(200), nullable=False)
+    title = Column(String(300))
+    company = Column(String(200))
+    industry = Column(String(200))
+    profile_url = Column(String(500), unique=True, nullable=False)
+
+    # Monitoring settings
+    is_active = Column(Boolean, default=True)  # Are we actively monitoring them?
+    monitoring_frequency = Column(String(20), default='daily')  # daily, weekly, monthly
+    priority = Column(String(20), default='medium')  # low, medium, high
+
+    # Current stats (latest snapshot)
+    followers_count = Column(Integer, default=0)
+    connections_count = Column(Integer, default=0)
+    posts_count = Column(Integer, default=0)
+
+    # Derived metrics (calculated from snapshots)
+    avg_posting_frequency = Column(Float, default=0.0)  # posts per week
+    avg_engagement_rate = Column(Float, default=0.0)  # percentage
+    avg_likes_per_post = Column(Float, default=0.0)
+    avg_comments_per_post = Column(Float, default=0.0)
+
+    # Comparison with your performance
+    relative_engagement = Column(Float)  # Their engagement vs yours (ratio)
+    relative_frequency = Column(Float)  # Their posting frequency vs yours (ratio)
+
+    # Metadata
+    notes = Column(Text)
+    tags = Column(String(500))  # Comma-separated tags (e.g., "direct-competitor,thought-leader")
+
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    last_checked = Column(DateTime)
+
+    # Relationships
+    snapshots = relationship("CompetitorSnapshot", back_populates="competitor", cascade="all, delete-orphan")
+
+    def __repr__(self):
+        return f"<Competitor(id={self.id}, name='{self.name}', active={self.is_active})>"
+
+
+class CompetitorSnapshot(Base):
+    """Model for tracking competitor metrics over time"""
+    __tablename__ = 'competitor_snapshots'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    competitor_id = Column(Integer, ForeignKey('competitors.id'), nullable=False)
+
+    # Profile stats
+    followers_count = Column(Integer, default=0)
+    connections_count = Column(Integer, default=0)
+    posts_count = Column(Integer, default=0)
+
+    # Recent activity (last 7 days)
+    posts_last_week = Column(Integer, default=0)
+    posts_last_month = Column(Integer, default=0)
+
+    # Engagement metrics (from recent posts)
+    total_likes = Column(Integer, default=0)
+    total_comments = Column(Integer, default=0)
+    total_shares = Column(Integer, default=0)
+    total_views = Column(Integer, default=0)
+
+    # Calculated metrics
+    avg_engagement_rate = Column(Float, default=0.0)
+    avg_likes_per_post = Column(Float, default=0.0)
+    avg_comments_per_post = Column(Float, default=0.0)
+    posting_frequency = Column(Float, default=0.0)  # posts per week
+
+    # Content analysis
+    top_hashtags = Column(Text)  # JSON array of most used hashtags
+    top_topics = Column(Text)  # JSON array of most discussed topics
+    content_types = Column(Text)  # JSON: {"text": 10, "image": 5, "video": 2, "poll": 1}
+
+    # Snapshot metadata
+    snapshot_date = Column(DateTime, default=datetime.utcnow)
+    sample_size = Column(Integer, default=0)  # How many posts analyzed
+    scrape_success = Column(Boolean, default=True)
+    error_message = Column(Text)
+
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    competitor = relationship("Competitor", back_populates="snapshots")
+
+    def __repr__(self):
+        return f"<CompetitorSnapshot(id={self.id}, competitor_id={self.competitor_id}, date={self.snapshot_date})>"
