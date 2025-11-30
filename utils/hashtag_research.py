@@ -143,14 +143,23 @@ class HashtagResearchEngine:
 
             for post in posts:
                 hashtags = self._extract_hashtags(post.content)
-                engagement = (post.views or 0) + (post.reactions or 0) * 2 + (post.comments or 0) * 3
+
+                # Get metrics from Analytics relationship
+                if post.analytics:
+                    views = post.analytics.views or 0
+                    likes = post.analytics.likes or 0
+                    comments = post.analytics.comments_count or 0
+                    shares = post.analytics.shares or 0
+                    engagement = views + (likes * 2) + (comments * 3) + (shares * 4)
+                else:
+                    views = likes = comments = shares = engagement = 0
 
                 for hashtag in hashtags:
                     hashtag_metrics[hashtag]['total_engagement'] += engagement
                     hashtag_metrics[hashtag]['post_count'] += 1
-                    hashtag_metrics[hashtag]['views'] += (post.views or 0)
-                    hashtag_metrics[hashtag]['reactions'] += (post.reactions or 0)
-                    hashtag_metrics[hashtag]['comments'] += (post.comments or 0)
+                    hashtag_metrics[hashtag]['views'] += views
+                    hashtag_metrics[hashtag]['reactions'] += likes
+                    hashtag_metrics[hashtag]['comments'] += comments
 
             # Calculate scores and sort
             scored_hashtags = []

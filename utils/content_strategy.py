@@ -146,11 +146,20 @@ class ContentStrategyAnalyzer:
             content_type = self._classify_content_type(post.content)
             engagement = self._calculate_engagement_score(post)
 
+            # Get metrics from Analytics relationship
+            if post.analytics:
+                views = post.analytics.views or 0
+                reactions = post.analytics.likes or 0
+                comments = post.analytics.comments_count or 0
+                shares = post.analytics.shares or 0
+            else:
+                views = reactions = comments = shares = 0
+
             type_metrics[content_type]['count'] += 1
-            type_metrics[content_type]['total_views'] += (post.views or 0)
-            type_metrics[content_type]['total_reactions'] += (post.reactions or 0)
-            type_metrics[content_type]['total_comments'] += (post.comments or 0)
-            type_metrics[content_type]['total_shares'] += (post.shares or 0)
+            type_metrics[content_type]['total_views'] += views
+            type_metrics[content_type]['total_reactions'] += reactions
+            type_metrics[content_type]['total_comments'] += comments
+            type_metrics[content_type]['total_shares'] += shares
             type_metrics[content_type]['engagement_scores'].append(engagement)
 
         # Calculate averages and sort
@@ -188,10 +197,14 @@ class ContentStrategyAnalyzer:
 
     def _calculate_engagement_score(self, post) -> float:
         """Calculate weighted engagement score for a post."""
-        views = post.views or 0
-        reactions = post.reactions or 0
-        comments = post.comments or 0
-        shares = post.shares or 0
+        # Get metrics from Analytics relationship
+        if post.analytics:
+            views = post.analytics.views or 0
+            reactions = post.analytics.likes or 0
+            comments = post.analytics.comments_count or 0
+            shares = post.analytics.shares or 0
+        else:
+            views = reactions = comments = shares = 0
 
         # Weighted scoring: comments > shares > reactions > views
         score = (views * 0.1) + (reactions * 1.0) + (comments * 3.0) + (shares * 2.0)
@@ -358,10 +371,17 @@ class ContentStrategyAnalyzer:
 
     def _calculate_overall_metrics(self, posts: List) -> Dict:
         """Calculate overall performance metrics."""
-        total_views = sum(p.views or 0 for p in posts)
-        total_reactions = sum(p.reactions or 0 for p in posts)
-        total_comments = sum(p.comments or 0 for p in posts)
-        total_shares = sum(p.shares or 0 for p in posts)
+        total_views = 0
+        total_reactions = 0
+        total_comments = 0
+        total_shares = 0
+
+        for p in posts:
+            if p.analytics:
+                total_views += p.analytics.views or 0
+                total_reactions += p.analytics.likes or 0
+                total_comments += p.analytics.comments_count or 0
+                total_shares += p.analytics.shares or 0
 
         count = len(posts)
 

@@ -19,13 +19,13 @@ import yaml
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from database.session import get_session
+from database.db import Database
 from utils.hashtag_research import HashtagResearchEngine
 from utils.content_strategy import ContentStrategyAnalyzer
-from ai.anthropic_client import AnthropicClient
-from ai.openai_client import OpenAIClient
-from ai.gemini_client import GeminiClient
-from ai.local_llm_client import LocalLLMClient
+from ai.anthropic_provider import AnthropicProvider
+from ai.openai_provider import OpenAIProvider
+from ai.gemini_provider import GeminiProvider
+from ai.local_llm_provider import LocalLLMProvider
 
 logging.basicConfig(
     level=logging.INFO,
@@ -51,13 +51,13 @@ def get_ai_client(config):
 
     try:
         if provider == 'anthropic':
-            return AnthropicClient(config.get('anthropic', {}))
+            return AnthropicProvider(config.get('anthropic', {}))
         elif provider == 'openai':
-            return OpenAIClient(config.get('openai', {}))
+            return OpenAIProvider(config.get('openai', {}))
         elif provider == 'gemini':
-            return GeminiClient(config.get('gemini', {}))
+            return GeminiProvider(config.get('gemini', {}))
         else:  # local or default
-            return LocalLLMClient(config.get('local_llm', {}))
+            return LocalLLMProvider(config.get('local_llm', {}))
     except Exception as e:
         logger.warning(f"Could not initialize AI client: {e}")
         return None
@@ -312,8 +312,9 @@ def main():
     if not config:
         return
 
-    # Get database session
-    db_session = get_session()
+    # Initialize database and get session
+    db = Database(config)
+    db_session = db.get_session()
 
     # Get AI client
     ai_client = get_ai_client(config)
