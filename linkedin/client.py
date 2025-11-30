@@ -249,3 +249,366 @@ class LinkedInClient:
 
         self.driver.get(self.get_feed_url())
         time.sleep(3)
+
+    # ========================================
+    # CONNECTION REQUEST METHODS
+    # ========================================
+
+    def send_connection_request(self, profile_url: str, message: Optional[str] = None) -> bool:
+        """
+        Send a connection request to a LinkedIn profile
+
+        Args:
+            profile_url: The LinkedIn profile URL
+            message: Optional personalized message (max 300 characters)
+
+        Returns:
+            True if successful, False otherwise
+        """
+        if not self.logged_in:
+            raise Exception("Must be logged in to send connection requests")
+
+        try:
+            # Navigate to profile
+            self.driver.get(profile_url)
+            time.sleep(3)
+
+            # Look for "Connect" button
+            connect_button = None
+            try:
+                # Try different selectors for the Connect button
+                connect_selectors = [
+                    "//button[contains(@aria-label, 'Invite') and contains(@aria-label, 'to connect')]",
+                    "//button[.//span[contains(text(), 'Connect')]]",
+                    "//button[@aria-label='Connect']",
+                    "//span[text()='Connect']/ancestor::button"
+                ]
+
+                for selector in connect_selectors:
+                    try:
+                        connect_button = self.driver.find_element(By.XPATH, selector)
+                        if connect_button:
+                            break
+                    except NoSuchElementException:
+                        continue
+
+            except Exception as e:
+                print(f"Error finding Connect button: {e}")
+                return False
+
+            if not connect_button:
+                print("Could not find Connect button - user may already be a connection or pending")
+                return False
+
+            # Click the Connect button
+            connect_button.click()
+            time.sleep(2)
+
+            # If there's a message, add it
+            if message:
+                try:
+                    # Look for "Add a note" button
+                    add_note_button = self.driver.find_element(
+                        By.XPATH,
+                        "//button[@aria-label='Add a note' or contains(text(), 'Add a note')]"
+                    )
+                    add_note_button.click()
+                    time.sleep(1)
+
+                    # Find the message textarea
+                    message_box = self.driver.find_element(
+                        By.XPATH,
+                        "//textarea[@name='message' or @id='custom-message']"
+                    )
+
+                    # LinkedIn has a 300 character limit for connection messages
+                    truncated_message = message[:300] if len(message) > 300 else message
+                    message_box.send_keys(truncated_message)
+                    time.sleep(1)
+
+                except Exception as e:
+                    print(f"Warning: Could not add personalized message: {e}")
+
+            # Click Send button
+            try:
+                send_button = self.driver.find_element(
+                    By.XPATH,
+                    "//button[@aria-label='Send now' or contains(@aria-label, 'Send invitation') or .//span[contains(text(), 'Send')]]"
+                )
+                send_button.click()
+                time.sleep(2)
+
+                print(f"✓ Connection request sent to {profile_url}")
+                return True
+
+            except Exception as e:
+                print(f"Error clicking Send button: {e}")
+                # Try to close any modal that might be open
+                try:
+                    dismiss_button = self.driver.find_element(By.XPATH, "//button[@aria-label='Dismiss']")
+                    dismiss_button.click()
+                except:
+                    pass
+                return False
+
+        except Exception as e:
+            print(f"Error sending connection request: {e}")
+            return False
+
+    def get_incoming_connection_requests(self) -> list:
+        """
+        Get list of incoming (pending) connection requests
+
+        Returns:
+            List of dictionaries with request details:
+            [{
+                'name': str,
+                'title': str,
+                'company': str,
+                'profile_url': str,
+                'mutual_connections': int,
+                'request_id': str
+            }, ...]
+        """
+        if not self.logged_in:
+            raise Exception("Must be logged in to get connection requests")
+
+        try:
+            # Navigate to My Network page (where pending requests are shown)
+            self.driver.get("https://www.linkedin.com/mynetwork/invitation-manager/")
+            time.sleep(3)
+
+            requests = []
+
+            # Find all invitation cards
+            try:
+                invitation_cards = self.driver.find_elements(
+                    By.CSS_SELECTOR,
+                    ".invitation-card, .mn-invitation-card"
+                )
+
+                for card in invitation_cards[:20]:  # Limit to first 20
+                    try:
+                        request_data = {}
+
+                        # Get name
+                        try:
+                            name_elem = card.find_element(By.CSS_SELECTOR, ".invitation-card__name, .mn-invitation-card__name")
+                            request_data['name'] = name_elem.text.strip()
+                        except:
+                            request_data['name'] = "Unknown"
+
+                        # Get title
+                        try:
+                            title_elem = card.find_element(By.CSS_SELECTOR, ".invitation-card__subtitle, .mn-invitation-card__subtitle")
+                            request_data['title'] = title_elem.text.strip()
+                        except:
+                            request_data['title'] = None
+
+                        # Get profile URL
+                        try:
+                            link_elem = card.find_element(By.CSS_SELECTOR, "a[href*='/in/']")
+                            request_data['profile_url'] = link_elem.get_attribute('href')
+                        except:
+                            request_data['profile_url'] = None
+
+                        # Get mutual connections count
+                        try:
+                            mutual_elem = card.find_element(By.XPATH, ".//*[contains(text(), 'mutual connection')]")
+                            mutual_text = mutual_elem.text
+                            # Extract number from text like "5 mutual connections"
+                            import re
+                            match = re.search(r'(\d+)', mutual_text)
+                            request_data['mutual_connections'] = int(match.group(1)) if match else 0
+                        except:
+                            request_data['mutual_connections'] = 0
+
+                        # Get company (parse from subtitle if available)
+                        if request_data.get('title') and ' at ' in request_data.get('title', ''):
+                            parts = request_data['title'].split(' at ')
+                            if len(parts) > 1:
+                                request_data['company'] = parts[1].strip()
+                                request_data['title'] = parts[0].strip()
+                        else:
+                            request_data['company'] = None
+
+                        # Generate a pseudo request_id from profile URL
+                        if request_data.get('profile_url'):
+                            request_data['request_id'] = request_data['profile_url'].split('/in/')[-1].split('/')[0]
+                        else:
+                            request_data['request_id'] = None
+
+                        requests.append(request_data)
+
+                    except Exception as e:
+                        print(f"Error parsing invitation card: {e}")
+                        continue
+
+            except Exception as e:
+                print(f"Error finding invitation cards: {e}")
+
+            return requests
+
+        except Exception as e:
+            print(f"Error getting incoming requests: {e}")
+            return []
+
+    def accept_connection_request(self, request_id: str) -> bool:
+        """
+        Accept an incoming connection request
+
+        Args:
+            request_id: The request ID (profile username)
+
+        Returns:
+            True if successful, False otherwise
+        """
+        if not self.logged_in:
+            raise Exception("Must be logged in to accept connections")
+
+        try:
+            # Navigate to invitation manager
+            self.driver.get("https://www.linkedin.com/mynetwork/invitation-manager/")
+            time.sleep(3)
+
+            # Find the invitation card for this profile
+            try:
+                # Find Accept button associated with this profile
+                accept_button = self.driver.find_element(
+                    By.XPATH,
+                    f"//a[contains(@href, '/in/{request_id}')]/ancestor::li//button[@aria-label='Accept' or contains(@aria-label, 'Accept')]"
+                )
+                accept_button.click()
+                time.sleep(2)
+
+                print(f"✓ Accepted connection request from {request_id}")
+                return True
+
+            except NoSuchElementException:
+                print(f"Could not find Accept button for {request_id}")
+                return False
+
+        except Exception as e:
+            print(f"Error accepting connection request: {e}")
+            return False
+
+    def decline_connection_request(self, request_id: str) -> bool:
+        """
+        Decline an incoming connection request
+
+        Args:
+            request_id: The request ID (profile username)
+
+        Returns:
+            True if successful, False otherwise
+        """
+        if not self.logged_in:
+            raise Exception("Must be logged in to decline connections")
+
+        try:
+            # Navigate to invitation manager
+            self.driver.get("https://www.linkedin.com/mynetwork/invitation-manager/")
+            time.sleep(3)
+
+            try:
+                # Find Ignore/Decline button
+                ignore_button = self.driver.find_element(
+                    By.XPATH,
+                    f"//a[contains(@href, '/in/{request_id}')]/ancestor::li//button[@aria-label='Ignore' or contains(@aria-label, 'Ignore')]"
+                )
+                ignore_button.click()
+                time.sleep(2)
+
+                print(f"✓ Declined connection request from {request_id}")
+                return True
+
+            except NoSuchElementException:
+                print(f"Could not find Ignore button for {request_id}")
+                return False
+
+        except Exception as e:
+            print(f"Error declining connection request: {e}")
+            return False
+
+    # ========================================
+    # MESSAGING METHODS
+    # ========================================
+
+    def send_message(self, profile_url: str, message_text: str) -> bool:
+        """
+        Send a direct message to a connection
+
+        Args:
+            profile_url: LinkedIn profile URL of the recipient
+            message_text: The message text to send
+
+        Returns:
+            True if successful, False otherwise
+        """
+        if not self.logged_in:
+            raise Exception("Must be logged in to send messages")
+
+        try:
+            # Navigate to profile
+            self.driver.get(profile_url)
+            time.sleep(3)
+
+            # Click the Message button
+            try:
+                message_button = self.driver.find_element(
+                    By.XPATH,
+                    "//button[contains(@aria-label, 'Message') or .//span[text()='Message']]"
+                )
+                message_button.click()
+                time.sleep(2)
+
+            except NoSuchElementException:
+                print("Could not find Message button - user may not be a connection")
+                return False
+
+            # Find the message input box
+            try:
+                # Wait for message box to appear
+                message_box = WebDriverWait(self.driver, 10).until(
+                    EC.presence_of_element_located((
+                        By.CSS_SELECTOR,
+                        "div.msg-form__contenteditable, div[role='textbox']"
+                    ))
+                )
+
+                # Type the message
+                message_box.click()
+                time.sleep(0.5)
+                message_box.send_keys(message_text)
+                time.sleep(1)
+
+                # Find and click Send button
+                send_button = self.driver.find_element(
+                    By.XPATH,
+                    "//button[contains(@class, 'msg-form__send-button') or @type='submit']"
+                )
+                send_button.click()
+                time.sleep(2)
+
+                print(f"✓ Message sent to {profile_url}")
+                return True
+
+            except Exception as e:
+                print(f"Error sending message: {e}")
+                return False
+
+        except Exception as e:
+            print(f"Error in send_message: {e}")
+            return False
+
+    def close_messaging_overlay(self):
+        """Close the messaging overlay if it's open"""
+        try:
+            close_button = self.driver.find_element(
+                By.XPATH,
+                "//button[@aria-label='Close' or contains(@class, 'msg-overlay-bubble-header__control--close')]"
+            )
+            close_button.click()
+            time.sleep(1)
+        except:
+            pass  # No overlay to close

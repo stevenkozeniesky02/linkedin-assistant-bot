@@ -399,3 +399,30 @@ Return as a simple list, one hashtag per line.
                     hashtags.append(hashtag)
 
         return hashtags[:count]
+
+    def generate_text(
+        self,
+        prompt: str,
+        max_tokens: int = 500,
+        temperature: float = 0.7
+    ) -> str:
+        """
+        Generate text from a custom prompt
+
+        Args:
+            prompt: The prompt to generate text from
+            max_tokens: Maximum tokens to generate
+            temperature: Sampling temperature (0-1)
+
+        Returns:
+            Generated text
+        """
+        response = self.client.chat.completions.create(
+            model=self.model,
+            messages=[
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens=max_tokens,
+            temperature=temperature
+        )
+        return response.choices[0].message.content.strip()

@@ -11,6 +11,8 @@ from database.models import (
     SequenceEnrollment, SequenceMessage, Activity
 )
 from utils.safety_monitor import SafetyMonitor
+from utils.lead_scoring import LeadScoringEngine
+from utils.message_sequence_engine import MessageSequenceEngine
 from linkedin.connection_manager import ConnectionManager
 from ai import get_ai_provider
 
@@ -36,12 +38,20 @@ class NetworkGrowthAutomation:
         self.connection_manager = ConnectionManager(db_session, config)
         self.ai_provider = get_ai_provider(config)
 
+        # Initialize lead scoring engine
+        self.lead_scorer = LeadScoringEngine(db_session, config)
+
+        # Initialize message sequence engine
+        self.sequence_engine = MessageSequenceEngine(db_session, config)
+
         # Get network growth config
         self.growth_config = config.get('network_growth', {})
 
         # Connection request settings
         self.max_requests_per_day = self.growth_config.get('max_requests_per_day', 10)
         self.personalize_requests = self.growth_config.get('personalize_requests', True)
+        self.use_lead_scoring = self.growth_config.get('use_lead_scoring', True)
+        self.min_lead_score = self.growth_config.get('min_lead_score', 40)  # Minimum score to send request
 
         # Auto-accept settings
         self.auto_accept_enabled = self.growth_config.get('auto_accept_enabled', False)
@@ -49,6 +59,9 @@ class NetworkGrowthAutomation:
 
         # Message sequence settings
         self.auto_enroll_new_connections = self.growth_config.get('auto_enroll_new_connections', True)
+        self.use_sequence_ab_testing = self.growth_config.get('use_sequence_ab_testing', False)
+        self.use_behavioral_triggers = self.growth_config.get('use_behavioral_triggers', True)
+        self.use_timezone_scheduling = self.growth_config.get('use_timezone_scheduling', True)
 
     # ========================================
     # CONNECTION REQUEST AUTOMATION
@@ -57,8 +70,14 @@ class NetworkGrowthAutomation:
     def send_connection_request(self, profile_url: str, name: str,
                                 title: str = None, company: str = None,
                                 location: str = None, industry: str = None,
+                                mutual_connections: int = 0,
+                                mutual_connection_names: List[str] = None,
+                                has_profile_photo: bool = True,
+                                connection_count: int = None,
+                                recent_activity: datetime = None,
                                 custom_message: str = None,
-                                source: str = 'manual') -> Optional[ConnectionRequest]:
+                                source: str = 'manual',
+                                skip_scoring: bool = False) -> Optional[ConnectionRequest]:
         """
         Send a connection request with optional personalized message
 
@@ -69,8 +88,14 @@ class NetworkGrowthAutomation:
             company: Target's company
             location: Target's location
             industry: Target's industry
+            mutual_connections: Number of mutual connections
+            mutual_connection_names: List of mutual connection names
+            has_profile_photo: Whether profile has photo
+            connection_count: Their total connection count
+            recent_activity: Last activity date
             custom_message: Custom message (if None, will generate with AI)
             source: Source of this request (manual, campaign, auto, search)
+            skip_scoring: Skip lead scoring (for manual overrides)
 
         Returns:
             ConnectionRequest object if successful, None otherwise
@@ -90,20 +115,65 @@ class NetworkGrowthAutomation:
             print(f"⛔ Daily connection request limit reached ({self.max_requests_per_day})")
             return None
 
+        # Score the prospect using lead scoring engine
+        lead_score = None
+        score_breakdown = None
+        priority = None
+
+        if self.use_lead_scoring and not skip_scoring:
+            prospect = {
+                'name': name,
+                'title': title,
+                'company': company,
+                'industry': industry,
+                'location': location,
+                'profile_url': profile_url,
+                'mutual_connections': mutual_connections,
+                'mutual_connection_names': mutual_connection_names or [],
+                'has_profile_photo': has_profile_photo,
+                'connection_count': connection_count,
+                'recent_activity': recent_activity
+            }
+
+            score_result = self.lead_scorer.score_prospect(prospect)
+            lead_score = score_result['total_score']
+            score_breakdown = score_result['scores_breakdown']
+            priority = score_result['priority']
+
+            # Check minimum score threshold
+            if lead_score < self.min_lead_score:
+                print(f"⛔ Lead score too low ({lead_score:.1f} < {self.min_lead_score}) - skipping {name}")
+                print(f"   Priority: {priority} | Recommendation: {score_result['recommendation']}")
+                return None
+
+            print(f"✅ Lead score: {lead_score:.1f}/100 (Priority: {priority})")
+            if score_breakdown['engagement_history'] > 50:
+                print(f"   💎 Has engaged with your content!")
+            if score_breakdown['mutual_connections'] > 70:
+                print(f"   🤝 Strong mutual connections")
+            if score_breakdown['company_targeting'] > 70:
+                print(f"   🎯 Target company employee")
+
         # Generate personalized message if needed
         message = custom_message
         if message is None and self.personalize_requests:
-            message = self._generate_connection_message(name, title, company)
+            # Pass score context to message generator for better personalization
+            message = self._generate_connection_message(
+                name, title, company,
+                lead_score=lead_score,
+                score_breakdown=score_breakdown
+            )
 
         try:
             # Send connection request via LinkedIn client
-            # NOTE: This requires LinkedIn automation implementation
-            # success = self.client.send_connection_request(profile_url, message)
+            if self.client:
+                success = self.client.send_connection_request(profile_url, message)
+            else:
+                # Client not initialized (testing mode)
+                print("⚠️  LinkedIn client not initialized - simulating request")
+                success = True
 
-            # For now, we'll simulate and track in database
-            success = True  # Placeholder
-
-            # Create connection request record
+            # Create connection request record with lead score
             conn_request = ConnectionRequest(
                 target_name=name,
                 target_profile_url=profile_url,
@@ -115,7 +185,10 @@ class NetworkGrowthAutomation:
                 status='pending' if success else 'failed',
                 source=source,
                 sent_at=datetime.utcnow(),
-                success=success
+                success=success,
+                lead_score=lead_score,
+                score_breakdown=json.dumps(score_breakdown) if score_breakdown else None,
+                priority_tier=priority
             )
 
             self.db.add(conn_request)
@@ -142,7 +215,8 @@ class NetworkGrowthAutomation:
             return None
 
     def _generate_connection_message(self, name: str, title: str = None,
-                                    company: str = None) -> str:
+                                    company: str = None, lead_score: float = None,
+                                    score_breakdown: Dict = None) -> str:
         """
         Generate personalized connection request message with AI
 
@@ -150,18 +224,32 @@ class NetworkGrowthAutomation:
             name: Target's name
             title: Target's job title
             company: Target's company
+            lead_score: Lead score (0-100) if available
+            score_breakdown: Score breakdown by category if available
 
         Returns:
             Personalized message string
         """
         user_profile = self.config.get('user_profile', {})
 
+        # Build context from score breakdown for better personalization
+        context_hints = []
+        if score_breakdown:
+            if score_breakdown.get('engagement_history', 0) > 50:
+                context_hints.append("they've engaged with your content before")
+            if score_breakdown.get('mutual_connections', 0) > 70:
+                context_hints.append("you have strong mutual connections")
+            if score_breakdown.get('company_targeting', 0) > 70:
+                context_hints.append("they work at a target company")
+
+        context_note = f"\nContext: {', '.join(context_hints)}" if context_hints else ""
+
         prompt = f"""Generate a brief, professional LinkedIn connection request message.
 
 TARGET PERSON:
 - Name: {name}
 - Title: {title or 'Professional'}
-- Company: {company or 'their company'}
+- Company: {company or 'their company'}{context_note}
 
 YOUR PROFILE:
 - Name: {user_profile.get('name', 'Your Name')}
@@ -172,6 +260,7 @@ Requirements:
 - Keep it SHORT (under 200 characters to fit LinkedIn's limit)
 - Be genuine and professional
 - Mention a shared interest or connection point
+- If they engaged with your content, acknowledge it naturally
 - NO generic phrases like "I'd love to connect" or "expand my network"
 - NO emojis
 - Direct and authentic
@@ -218,33 +307,59 @@ Generate ONLY the message text, nothing else."""
     # AUTO-ACCEPT CONNECTION REQUESTS
     # ========================================
 
-    def process_incoming_requests(self) -> Dict:
+    def process_incoming_requests(self, max_requests: int = None) -> Dict:
         """
         Process incoming connection requests with auto-accept filters
+
+        Args:
+            max_requests: Maximum number of requests to process (None = all)
 
         Returns:
             Dictionary with processing results
         """
         if not self.auto_accept_enabled:
-            return {'enabled': False, 'message': 'Auto-accept is disabled'}
+            return {
+                'enabled': False,
+                'message': 'Auto-accept is disabled',
+                'total_processed': 0,
+                'accepted': 0,
+                'declined': 0,
+                'pending': 0,
+                'accepted_profiles': []
+            }
 
-        # NOTE: This requires LinkedIn automation to fetch incoming requests
-        # incoming_requests = self.client.get_incoming_connection_requests()
-
-        # Placeholder for demonstration
-        incoming_requests = []
+        # Get incoming requests via LinkedIn client
+        if self.client:
+            incoming_requests = self.client.get_incoming_connection_requests()
+        else:
+            # Client not initialized (testing mode)
+            print("⚠️  LinkedIn client not initialized - no incoming requests")
+            incoming_requests = []
 
         accepted = 0
         declined = 0
         pending = 0
+        accepted_profiles = []
 
-        for request in incoming_requests:
+        # Limit requests to process if specified
+        requests_to_process = incoming_requests[:max_requests] if max_requests else incoming_requests
+
+        for request in requests_to_process:
             decision = self._evaluate_connection_request(request)
 
             if decision == 'accept':
                 # Accept the request
-                # self.client.accept_connection_request(request['id'])
+                if self.client:
+                    self.client.accept_connection_request(request.get('request_id', ''))
                 accepted += 1
+
+                # Track accepted profile
+                profile_info = f"{request['name']}"
+                if request.get('title'):
+                    profile_info += f" - {request['title']}"
+                if request.get('company'):
+                    profile_info += f" at {request['company']}"
+                accepted_profiles.append(profile_info)
 
                 # Add to connections
                 self.connection_manager.add_connection(
@@ -257,7 +372,8 @@ Generate ONLY the message text, nothing else."""
 
             elif decision == 'decline':
                 # Decline the request
-                # self.client.decline_connection_request(request['id'])
+                if self.client:
+                    self.client.decline_connection_request(request.get('request_id', ''))
                 declined += 1
 
             else:
@@ -265,9 +381,11 @@ Generate ONLY the message text, nothing else."""
 
         return {
             'enabled': True,
+            'total_processed': len(requests_to_process),
             'accepted': accepted,
             'declined': declined,
-            'pending': pending
+            'pending': pending,
+            'accepted_profiles': accepted_profiles
         }
 
     def _evaluate_connection_request(self, request: Dict) -> str:
@@ -349,13 +467,15 @@ Generate ONLY the message text, nothing else."""
 
         return sequence
 
-    def enroll_in_sequence(self, connection_id: int, sequence_id: int) -> Optional[SequenceEnrollment]:
+    def enroll_in_sequence(self, connection_id: int, sequence_id: int,
+                          use_timezone_scheduling: bool = None) -> Optional[SequenceEnrollment]:
         """
         Enroll a connection in a message sequence
 
         Args:
             connection_id: Connection ID
             sequence_id: MessageSequence ID
+            use_timezone_scheduling: Override timezone scheduling setting (None = use config default)
 
         Returns:
             SequenceEnrollment object
@@ -373,7 +493,7 @@ Generate ONLY the message text, nothing else."""
             print(f"Connection {connection_id} already enrolled in sequence {sequence_id}")
             return existing
 
-        # Get sequence
+        # Get sequence and connection
         sequence = self.db.query(MessageSequence).filter(
             MessageSequence.id == sequence_id
         ).first()
@@ -382,10 +502,36 @@ Generate ONLY the message text, nothing else."""
             print(f"Sequence {sequence_id} not found or inactive")
             return None
 
+        connection = self.db.query(Connection).filter(
+            Connection.id == connection_id
+        ).first()
+
+        if not connection:
+            print(f"Connection {connection_id} not found")
+            return None
+
+        # Use timezone scheduling if enabled
+        use_tz = use_timezone_scheduling if use_timezone_scheduling is not None else self.use_timezone_scheduling
+
         # Calculate first message time
         steps = json.loads(sequence.steps)
         first_step_delay = steps[0].get('delay_days', 0)
-        next_message_at = datetime.utcnow() + timedelta(days=first_step_delay)
+
+        if use_tz and connection.location:
+            # Use timezone-based scheduling from message sequence engine
+            try:
+                next_message_at = self.sequence_engine.schedule_with_timezone(
+                    connection=connection,
+                    send_time_local="09:00"  # Default to 9am their local time
+                )
+                # Add delay days
+                next_message_at = next_message_at + timedelta(days=first_step_delay)
+                print(f"   🌍 Using timezone scheduling for {connection.location}")
+            except Exception as e:
+                print(f"   ⚠️ Timezone scheduling failed, using UTC: {e}")
+                next_message_at = datetime.utcnow() + timedelta(days=first_step_delay)
+        else:
+            next_message_at = datetime.utcnow() + timedelta(days=first_step_delay)
 
         # Create enrollment
         enrollment = SequenceEnrollment(
@@ -411,10 +557,20 @@ Generate ONLY the message text, nothing else."""
         """
         Process message sequences that are due to send
 
+        Also checks for behavioral triggers if enabled
+
         Returns:
             Dictionary with processing results
         """
         now = datetime.utcnow()
+
+        # Check behavioral triggers first (if enabled)
+        new_enrollments = 0
+        if self.use_behavioral_triggers:
+            try:
+                new_enrollments = self._check_behavioral_triggers()
+            except Exception as e:
+                print(f"⚠️ Error checking behavioral triggers: {e}")
 
         # Get enrollments with messages due
         due_enrollments = self.db.query(SequenceEnrollment).filter(
@@ -425,7 +581,11 @@ Generate ONLY the message text, nothing else."""
         ).all()
 
         if not due_enrollments:
-            return {'messages_sent': 0, 'message': 'No messages due'}
+            return {
+                'messages_sent': 0,
+                'message': 'No messages due',
+                'new_enrollments': new_enrollments
+            }
 
         messages_sent = 0
         errors = 0
@@ -444,7 +604,8 @@ Generate ONLY the message text, nothing else."""
         return {
             'messages_sent': messages_sent,
             'errors': errors,
-            'total_processed': len(due_enrollments)
+            'total_processed': len(due_enrollments),
+            'new_enrollments': new_enrollments
         }
 
     def _send_sequence_message(self, enrollment: SequenceEnrollment) -> bool:
@@ -487,11 +648,14 @@ Generate ONLY the message text, nothing else."""
 
         try:
             # Send message via LinkedIn
-            # NOTE: Requires LinkedIn messaging implementation
-            # success = self.client.send_message(connection.profile_url, message_content)
-
-            # Placeholder
-            success = True
+            if self.client:
+                success = self.client.send_message(connection.profile_url, message_content)
+                # Close any messaging overlay
+                self.client.close_messaging_overlay()
+            else:
+                # Client not initialized (testing mode)
+                print("⚠️  LinkedIn client not initialized - simulating message send")
+                success = True
 
             # Create message record
             seq_message = SequenceMessage(
@@ -624,3 +788,156 @@ Generate ONLY the message, nothing else."""
         except Exception as e:
             print(f"Error generating sequence message: {e}")
             return f"Hi {connection.name.split()[0]}, great to connect with you. Looking forward to staying in touch!"
+
+    def _check_behavioral_triggers(self) -> int:
+        """
+        Check for behavioral triggers and auto-enroll connections in sequences
+
+        Returns:
+            Number of new enrollments created
+        """
+        # Get active sequences with behavioral triggers
+        sequences = self.db.query(MessageSequence).filter(
+            and_(
+                MessageSequence.is_active == True,
+                MessageSequence.trigger_type.in_(['profile_view', 'post_engagement'])
+            )
+        ).all()
+
+        if not sequences:
+            return 0
+
+        new_enrollments = 0
+
+        for sequence in sequences:
+            # Check for trigger events from message sequence engine
+            trigger_type = sequence.trigger_type
+
+            if trigger_type == 'profile_view':
+                # Find connections who viewed profile recently (last 24 hours)
+                trigger_connections = self.sequence_engine.check_profile_view_trigger(
+                    hours_ago=24
+                )
+            elif trigger_type == 'post_engagement':
+                # Find connections who engaged with posts recently
+                trigger_connections = self.sequence_engine.check_engagement_trigger(
+                    hours_ago=24
+                )
+            else:
+                continue
+
+            # Enroll each triggered connection
+            for conn_id in trigger_connections:
+                try:
+                    enrollment = self.enroll_in_sequence(conn_id, sequence.id)
+                    if enrollment:
+                        new_enrollments += 1
+                        print(f"   🎯 Behavioral trigger: Enrolled connection {conn_id} in '{sequence.name}'")
+                except Exception as e:
+                    print(f"   ⚠️ Failed to enroll connection {conn_id}: {e}")
+
+        return new_enrollments
+
+    # ========================================
+    # LEAD SCORING UTILITIES
+    # ========================================
+
+    def batch_score_prospects(self, prospects: List[Dict]) -> List[Dict]:
+        """
+        Score multiple prospects and return sorted by score
+
+        Args:
+            prospects: List of prospect dictionaries
+
+        Returns:
+            List of prospects with scores, sorted by total_score descending
+        """
+        return self.lead_scorer.batch_score_prospects(prospects)
+
+    def get_prospect_score_stats(self, prospects: List[Dict]) -> Dict:
+        """
+        Get statistics on a batch of scored prospects
+
+        Args:
+            prospects: List of prospects with scores
+
+        Returns:
+            Dictionary with statistics
+        """
+        return self.lead_scorer.get_score_stats(prospects)
+
+    # ========================================
+    # A/B TESTING FOR MESSAGE SEQUENCES
+    # ========================================
+
+    def create_ab_test_sequence(self, name: str, variant_a_steps: List[Dict],
+                                variant_b_steps: List[Dict],
+                                split_ratio: float = 0.5,
+                                trigger_type: str = 'new_connection',
+                                description: str = None) -> Dict:
+        """
+        Create an A/B test for message sequences
+
+        Args:
+            name: Base name for the test
+            variant_a_steps: Steps for variant A
+            variant_b_steps: Steps for variant B
+            split_ratio: Ratio for A/B split (0.5 = 50/50)
+            trigger_type: When to trigger the sequence
+            description: Description of the test
+
+        Returns:
+            Dictionary with variant A and B sequence IDs
+        """
+        if not self.use_sequence_ab_testing:
+            print("⚠️ A/B testing is disabled in config")
+            return None
+
+        # Create both sequences
+        seq_a = self.create_message_sequence(
+            name=f"{name} (Variant A)",
+            steps=variant_a_steps,
+            trigger_type=trigger_type,
+            description=f"A/B Test: {description or name}"
+        )
+
+        seq_b = self.create_message_sequence(
+            name=f"{name} (Variant B)",
+            steps=variant_b_steps,
+            trigger_type=trigger_type,
+            description=f"A/B Test: {description or name}"
+        )
+
+        # Store A/B test config
+        test_config = {
+            'variant_a_id': seq_a.id,
+            'variant_b_id': seq_b.id,
+            'split_ratio': split_ratio,
+            'name': name
+        }
+
+        print(f"✅ Created A/B test: {name}")
+        print(f"   Variant A: Sequence {seq_a.id}")
+        print(f"   Variant B: Sequence {seq_b.id}")
+        print(f"   Split: {int(split_ratio*100)}% A / {int((1-split_ratio)*100)}% B")
+
+        return test_config
+
+    def get_ab_test_results(self, variant_a_id: int, variant_b_id: int) -> Dict:
+        """
+        Get A/B test results for two sequence variants
+
+        Args:
+            variant_a_id: Variant A sequence ID
+            variant_b_id: Variant B sequence ID
+
+        Returns:
+            Dictionary with test results and winner
+        """
+        # Use message sequence engine for analysis
+        test_config = {
+            'variant_a_id': variant_a_id,
+            'variant_b_id': variant_b_id
+        }
+
+        return self.sequence_engine.get_ab_test_results(test_config)

@@ -361,6 +361,11 @@ class ConnectionRequest(Base):
     match_score = Column(Float, default=0.0)  # How well they match criteria (0-10)
     priority = Column(String(20), default='medium')  # low, medium, high
 
+    # Lead scoring (0-100 scale)
+    lead_score = Column(Float)  # Overall lead score from LeadScoringEngine
+    score_breakdown = Column(Text)  # JSON-encoded score breakdown by category
+    priority_tier = Column(String(20))  # critical, high, medium, low, ignore
+
     # Result tracking
     connection_id = Column(Integer, ForeignKey('connections.id'))  # Link to Connection if accepted
     success = Column(Boolean)
@@ -493,3 +498,161 @@ class SequenceMessage(Base):
 
     def __repr__(self):
         return f"<SequenceMessage(id={self.id}, enrollment_id={self.enrollment_id}, step={self.step_number}, status='{self.status}')>"
+
+
+class ABTest(Base):
+    """Model for A/B tests on content"""
+    __tablename__ = 'ab_tests'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+
+    # Test configuration
+    name = Column(String(200), nullable=False)
+    description = Column(Text)
+    hypothesis = Column(Text)  # What we're testing (e.g., "Short posts get more engagement")
+
+    # Test type
+    test_type = Column(String(50), nullable=False)  # headline, tone, length, emoji, time_of_day, cta, hashtag
+
+    # Status
+    status = Column(String(20), default='draft')  # draft, running, paused, completed, cancelled
+
+    # Statistical configuration
+    confidence_level = Column(Float, default=0.95)  # 95% confidence by default
+    minimum_sample_size = Column(Integer, default=30)  # Minimum posts per variant
+
+    # Duration
+    start_date = Column(DateTime)
+    end_date = Column(DateTime)
+    planned_duration_days = Column(Integer)  # How long to run the test
+
+    # Results
+    winner_variant_id = Column(Integer, ForeignKey('test_variants.id'))
+    is_significant = Column(Boolean, default=False)  # Statistical significance reached
+    p_value = Column(Float)  # Statistical p-value
+    confidence_interval = Column(String(100))  # Confidence interval as string
+
+    # Metadata
+    created_by = Column(String(100))
+    notes = Column(Text)
+
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    completed_at = Column(DateTime)
+
+    # Relationships
+    variants = relationship("TestVariant", back_populates="test", foreign_keys="TestVariant.test_id", cascade="all, delete-orphan")
+    winner = relationship("TestVariant", foreign_keys=[winner_variant_id], post_update=True)
+
+    def __repr__(self):
+        return f"<ABTest(id={self.id}, name='{self.name}', type='{self.test_type}', status='{self.status}')>"
+
+
+class TestVariant(Base):
+    """Model for individual variants within an A/B test"""
+    __tablename__ = 'test_variants'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    test_id = Column(Integer, ForeignKey('ab_tests.id'), nullable=False)
+
+    # Variant configuration
+    variant_name = Column(String(50), nullable=False)  # control, variant_a, variant_b, etc.
+    variant_label = Column(String(200))  # Human-readable label (e.g., "Short & Professional")
+
+    # Configuration (JSON string)
+    variant_config = Column(Text)  # JSON with variant settings (tone, length, emoji, etc.)
+
+    # Sample tracking
+    posts_count = Column(Integer, default=0)  # Number of posts in this variant
+
+    # Performance metrics (aggregated from Analytics)
+    total_views = Column(Integer, default=0)
+    total_likes = Column(Integer, default=0)
+    total_comments = Column(Integer, default=0)
+    total_shares = Column(Integer, default=0)
+
+    # Calculated metrics
+    avg_engagement_rate = Column(Float, default=0.0)  # Average engagement rate
+    avg_views = Column(Float, default=0.0)
+    avg_likes = Column(Float, default=0.0)
+    avg_comments = Column(Float, default=0.0)
+    avg_shares = Column(Float, default=0.0)
+
+    # Statistical analysis
+    std_deviation = Column(Float)  # Standard deviation of engagement rates
+    confidence_interval_lower = Column(Float)
+    confidence_interval_upper = Column(Float)
+
+    # Status
+    is_control = Column(Boolean, default=False)  # Is this the control variant?
+    is_winner = Column(Boolean, default=False)
+
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    test = relationship("ABTest", back_populates="variants", foreign_keys=[test_id])
+    assignments = relationship("TestAssignment", back_populates="variant", cascade="all, delete-orphan")
+
+    def calculate_metrics(self):
+        """Calculate average metrics from posts"""
+        if self.posts_count > 0:
+            self.avg_views = self.total_views / self.posts_count
+            self.avg_likes = self.total_likes / self.posts_count
+            self.avg_comments = self.total_comments / self.posts_count
+            self.avg_shares = self.total_shares / self.posts_count
+
+            # Calculate engagement rate
+            if self.total_views > 0:
+                total_engagement = self.total_likes + self.total_comments + self.total_shares
+                self.avg_engagement_rate = (total_engagement / self.total_views) * 100
+            else:
+                self.avg_engagement_rate = 0.0
+
+    def __repr__(self):
+        return f"<TestVariant(id={self.id}, test_id={self.test_id}, name='{self.variant_name}', posts={self.posts_count})>"
+
+
+class TestAssignment(Base):
+    """Model for assigning posts to test variants"""
+    __tablename__ = 'test_assignments'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    test_id = Column(Integer, ForeignKey('ab_tests.id'), nullable=False)
+    variant_id = Column(Integer, ForeignKey('test_variants.id'), nullable=False)
+    post_id = Column(Integer, ForeignKey('posts.id'), unique=True, nullable=False)
+
+    # Assignment metadata
+    assigned_at = Column(DateTime, default=datetime.utcnow)
+    assignment_method = Column(String(50))  # random, manual, weighted
+
+    # Performance snapshot (cached from Analytics)
+    views = Column(Integer, default=0)
+    likes = Column(Integer, default=0)
+    comments_count = Column(Integer, default=0)
+    shares = Column(Integer, default=0)
+    engagement_rate = Column(Float, default=0.0)
+
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    last_synced = Column(DateTime)  # When we last synced metrics from Analytics
+
+    # Relationships
+    test = relationship("ABTest")
+    variant = relationship("TestVariant", back_populates="assignments")
+    post = relationship("Post")
+
+    def sync_metrics_from_analytics(self, analytics):
+        """Update cached metrics from Analytics model"""
+        self.views = analytics.views
+        self.likes = analytics.likes
+        self.comments_count = analytics.comments_count
+        self.shares = analytics.shares
+        self.engagement_rate = analytics.engagement_rate
+        self.last_synced = datetime.utcnow()
+
+    def __repr__(self):
+        return f"<TestAssignment(id={self.id}, test_id={self.test_id}, variant_id={self.variant_id}, post_id={self.post_id})>"

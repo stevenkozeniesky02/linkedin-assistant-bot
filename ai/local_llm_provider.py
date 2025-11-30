@@ -139,14 +139,10 @@ HASHTAGS:
                 if interests:
                     context_str += f"- Interests: {', '.join(interests)}\n"
 
-        prompt = f"""Generate a thoughtful comment for this LinkedIn post:
-
-POST CONTENT:
+        prompt = f"""POST CONTENT:
 {post_content}{context_str}
 
-Requirements:
-- Tone: {tone}
-- Maximum length: {max_length} characters
+Write a {tone} comment (maximum {max_length} characters). Requirements:
 - NO EMOJIS - write naturally like a real person
 - Be conversational and authentic, not overly enthusiastic
 - Comment from YOUR perspective based on your profile above
@@ -156,14 +152,30 @@ Requirements:
 - Keep it concise - 2-3 sentences maximum
 - Sound human, not like AI-generated content
 - Avoid phrases like "I'm intrigued by", "fascinating", "I'd love to hear"
+- DO NOT include any preamble like "Sure!" or "Here is a comment:"
 - DO NOT wrap your response in quotation marks
 
-Return only the raw comment text with no quotes, no formatting, no labels.
+CRITICAL: Return ONLY the raw comment text itself. No preamble, no quotes, no labels, no extra text.
 """
 
-        system_prompt = "You are a real LinkedIn professional writing natural, conversational comments. Write like a human - be direct, authentic, and avoid corporate buzzwords or AI-sounding language. No emojis. Do not wrap your response in quotes."
+        system_prompt = "You are writing a LinkedIn comment. Return ONLY the comment text itself with absolutely no preamble, introduction, or explanation. Just the comment, nothing else."
 
         generated = self._generate(prompt, system_prompt).strip()
+
+        # Strip common AI preambles
+        preambles = [
+            "Sure thing! Here is a thoughtful comment for the LinkedIn post:",
+            "Sure! Here is a thoughtful comment:",
+            "Here is a thoughtful comment:",
+            "Sure thing!",
+            "Here's a comment:",
+            "Comment:",
+        ]
+
+        for preamble in preambles:
+            if generated.startswith(preamble):
+                generated = generated[len(preamble):].strip()
+                break
 
         # Strip any surrounding quotes that the AI might have added
         if generated.startswith('"') and generated.endswith('"'):
@@ -379,3 +391,23 @@ Return as a simple list, one hashtag per line.
                     hashtags.append(hashtag)
 
         return hashtags[:count]
+
+    def generate_text(
+        self,
+        prompt: str,
+        max_tokens: int = 500,
+        temperature: float = 0.7
+    ) -> str:
+        """
+        Generate text from a custom prompt
+
+        Args:
+            prompt: The prompt to generate text from
+            max_tokens: Maximum tokens to generate (not used in Ollama, included for API compatibility)
+            temperature: Sampling temperature (0-1)
+
+        Returns:
+            Generated text
+        """
+        # Use the internal _generate method
+        return self._generate(prompt=prompt)

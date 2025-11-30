@@ -26,6 +26,19 @@
 - **Comprehensive Tracking** - Cycle summaries with performance across all activities
 - **Human-Like Behavior** - Random delays, varied activity patterns
 
+### 🎭 Automation Modes System
+- **Feed Engagement** - Auto-scroll feed, like posts, post AI comments with keyword filtering
+- **Post Response** - Monitor your posts for comments and auto-reply with AI-generated responses
+- **Group Networking** - Join LinkedIn groups, engage with discussions, send connection requests
+- **Connection Outreach** - Automated targeted connection requests with personalized messages
+- **Influencer Engagement** - Engage with industry leaders within first hour of posting
+- **Job Market Research** - Track companies, engage with recruiters, monitor opportunities
+- **Direct Messaging** - Automated message campaigns with personalization
+- **Content Repurposing** - Auto-repost top performers after X days with format adaptation
+- **Passive Listening** - Monitor keywords, track mentions, identify trends
+- **Smart Scheduling** - Time-window based mode rotation (morning/midday/evening)
+- **Database Tracking** - Prevent duplicate actions across restarts
+
 ### 💬 Intelligent Engagement
 - **Natural Comments** - AI generates authentic, conversational comments (no emojis, no AI-speak)
 - **User Profile Context** - Comments reflect YOUR actual expertise and background
@@ -347,6 +360,29 @@ python main.py process-incoming --max-requests 5
 python main.py process-sequences
 ```
 
+### Automation Modes
+
+```bash
+# List all automation modes and their status
+python automation_cli.py list-modes
+
+# Run individual modes
+python automation_cli.py feed-engagement --duration 15
+python automation_cli.py post-response
+python automation_cli.py group-networking
+python automation_cli.py connection-outreach
+
+# Run all active modes
+python automation_cli.py run-all
+```
+
+**What Automation Modes Do:**
+- **Feed Engagement**: Scrolls through feed, likes/comments on relevant posts based on keywords
+- **Post Response**: Monitors your posts for new comments and auto-replies
+- **Group Networking**: Joins groups, engages with discussions, sends connection requests
+- **Connection Outreach**: Sends targeted connection requests with AI messages
+- More modes available - see `config.yaml` for full list and configuration
+
 ### Research Hashtags
 
 ```bash
@@ -360,6 +396,65 @@ python main.py suggest-topics
 ```
 
 AI suggests trending topics based on your industry and past performance.
+
+### A/B Testing
+
+```bash
+# Create a new A/B test
+python main.py ab-test --action create \
+  --name "Tone Comparison Test" \
+  --type tone \
+  --topic "The future of AI in software development" \
+  --variant-count 3 \
+  --posts-per-variant 30
+
+# List all A/B tests
+python main.py ab-test --action list
+
+# Start a test
+python main.py ab-test --action start --test-id 1
+
+# Generate variant posts for a test
+python main.py ab-test --action generate-variants \
+  --test-id 1 \
+  --topic "AI trends in 2025"
+
+# View test results
+python main.py ab-test --action results --test-id 1
+
+# Analyze test (statistical significance)
+python main.py ab-test --action analyze --test-id 1
+
+# Stop test and declare winner
+python main.py ab-test --action stop --test-id 1
+
+# Get AI recommendations
+python main.py ab-test --action recommendations --test-id 1
+```
+
+**Test Types:**
+- `tone` - Test different writing styles (professional, casual, thought leader, etc.)
+- `length` - Compare short vs medium vs long posts
+- `emoji` - With emojis vs without vs moderate
+- `headline` - Different headline approaches (question, statement, data-driven, etc.)
+- `cta` - Call-to-action variations (question, engagement, action, discussion, none)
+- `hashtag` - Hashtag strategies (minimal, moderate, extensive, none)
+
+**Workflow:**
+1. Create test with variant count
+2. Generate posts for each variant
+3. Publish posts over time (manually or via scheduler)
+4. System tracks performance automatically
+5. Analyze results when sufficient sample size reached
+6. Declare winner and apply insights to future content
+
+**Statistical Features:**
+- Minimum sample size requirements (default: 30 posts per variant)
+- Confidence level testing (default: 95%)
+- Two-sample t-test for significance
+- P-value and lift calculations
+- Confidence intervals for each variant
+- Automated winner selection
 
 ---
 
@@ -452,8 +547,21 @@ linkedin-assistant-bot/
 │   ├── connection_manager.py  # Connection quality tracking
 │   └── campaign_manager.py    # Campaign management & analytics
 │
+├── automation_modes/      # Modular automation system
+│   ├── base.py           # Base automation mode class
+│   ├── manager.py        # Automation manager & scheduler
+│   ├── feed_engagement.py    # Feed scrolling & engagement
+│   ├── post_response.py      # Auto-reply to post comments
+│   ├── group_networking.py   # LinkedIn group automation
+│   ├── connection_outreach.py  # Connection requests
+│   ├── influencer_engagement.py  # Engage with influencers
+│   ├── job_market_research.py    # Job tracking & recruiter engagement
+│   ├── direct_messaging.py       # DM campaigns
+│   ├── content_repurposing.py    # Repost top performers
+│   └── passive_listening.py      # Keyword monitoring & trends
+│
 ├── database/              # Data persistence
-│   ├── models.py         # SQLAlchemy models (Post, Comment, Campaign, Connection, etc.)
+│   ├── models.py         # SQLAlchemy models (Post, Comment, Campaign, Connection, Activity, etc.)
 │   └── db.py             # Database operations
 │
 ├── utils/                # Utilities
@@ -462,10 +570,14 @@ linkedin-assistant-bot/
 │   ├── campaign_executor.py  # Campaign execution engine
 │   ├── network_growth.py     # Connection automation & sequences
 │   ├── analytics_engine.py   # Performance analytics
-│   └── analytics_visualizer.py  # Rich terminal visualization
+│   ├── analytics_visualizer.py  # Rich terminal visualization
+│   ├── ab_testing_engine.py    # A/B testing with statistical analysis
+│   └── variant_generator.py    # Content variant generation for tests
 │
 ├── autonomous_agent_v2.py   # Autonomous agent v2.0 (integrated system)
-├── main.py                  # CLI entry point
+├── automation_cli.py        # Automation modes CLI
+├── demo_automation_modes.py # Automation modes demo
+├── main.py                  # Main CLI entry point
 ├── config.yaml             # Configuration
 └── requirements.txt        # Dependencies
 ```
@@ -535,14 +647,15 @@ See [ROADMAP.md](ROADMAP.md) for detailed feature plans.
 - ✅ Direct messaging automation (message sequences)
 - ✅ SafetyMonitor with rate limiting
 - ✅ Network growth automation
+- ✅ A/B testing framework with statistical analysis
 
 **Upcoming Features:**
-- A/B testing framework
 - Content recycling (auto-repost top performers)
 - Lead generation and tracking
 - Multi-account support
 - Conversation AI (respond to comments on your posts)
 - Content calendar planning
+- Voice & tone learning from existing posts
 
 ---
 

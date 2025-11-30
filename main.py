@@ -1729,7 +1729,25 @@ def connection_requests(action, profile_url, name, title, company, message, stat
         session = db.get_session()
 
         from utils.network_growth import NetworkGrowthAutomation
-        network_growth = NetworkGrowthAutomation(session, config)
+        from linkedin import LinkedInClient
+
+        # Initialize LinkedIn client if automation is enabled in config
+        linkedin_client = None
+        use_automation = config.get('network_growth', {}).get('use_automation', False)
+
+        if use_automation:
+            console.print("[yellow]⚠️  LinkedIn automation is enabled - browser will launch[/yellow]")
+            linkedin_client = LinkedInClient(config)
+            linkedin_client.start()
+            # Login if not already logged in
+            if not linkedin_client.is_logged_in():
+                console.print("[cyan]Logging into LinkedIn...[/cyan]")
+                if not linkedin_client.login():
+                    console.print("[red]Failed to login to LinkedIn - continuing without automation[/red]")
+                    linkedin_client.stop()
+                    linkedin_client = None
+
+        network_growth = NetworkGrowthAutomation(session, linkedin_client, config)
 
         if action == 'send':
             if not profile_url or not name:
@@ -1831,7 +1849,9 @@ def message_sequences(action, sequence_id, name, connection_id, trigger):
         from utils.network_growth import NetworkGrowthAutomation
         from database.models import MessageSequence, SequenceEnrollment
 
-        network_growth = NetworkGrowthAutomation(session, config)
+        # LinkedIn client placeholder (actual automation not implemented yet)
+        linkedin_client = None
+        network_growth = NetworkGrowthAutomation(session, linkedin_client, config)
 
         if action == 'create':
             if not name:
@@ -1971,7 +1991,25 @@ def process_incoming(max_requests):
         session = db.get_session()
 
         from utils.network_growth import NetworkGrowthAutomation
-        network_growth = NetworkGrowthAutomation(session, config)
+        from linkedin import LinkedInClient
+
+        # Initialize LinkedIn client if automation is enabled in config
+        linkedin_client = None
+        use_automation = config.get('network_growth', {}).get('use_automation', False)
+
+        if use_automation:
+            console.print("[yellow]⚠️  LinkedIn automation is enabled - browser will launch[/yellow]")
+            linkedin_client = LinkedInClient(config)
+            linkedin_client.start()
+            # Login if not already logged in
+            if not linkedin_client.is_logged_in():
+                console.print("[cyan]Logging into LinkedIn...[/cyan]")
+                if not linkedin_client.login():
+                    console.print("[red]Failed to login to LinkedIn - continuing without automation[/red]")
+                    linkedin_client.stop()
+                    linkedin_client = None
+
+        network_growth = NetworkGrowthAutomation(session, linkedin_client, config)
 
         console.print(f"\n[cyan]Processing incoming connection requests...[/cyan]")
         console.print(f"Max to process: {max_requests}\n")
@@ -2009,7 +2047,25 @@ def process_sequences():
         session = db.get_session()
 
         from utils.network_growth import NetworkGrowthAutomation
-        network_growth = NetworkGrowthAutomation(session, config)
+        from linkedin import LinkedInClient
+
+        # Initialize LinkedIn client if automation is enabled in config
+        linkedin_client = None
+        use_automation = config.get('network_growth', {}).get('use_automation', False)
+
+        if use_automation:
+            console.print("[yellow]⚠️  LinkedIn automation is enabled - browser will launch[/yellow]")
+            linkedin_client = LinkedInClient(config)
+            linkedin_client.start()
+            # Login if not already logged in
+            if not linkedin_client.is_logged_in():
+                console.print("[cyan]Logging into LinkedIn...[/cyan]")
+                if not linkedin_client.login():
+                    console.print("[red]Failed to login to LinkedIn - continuing without automation[/red]")
+                    linkedin_client.stop()
+                    linkedin_client = None
+
+        network_growth = NetworkGrowthAutomation(session, linkedin_client, config)
 
         console.print("\n[cyan]Processing due message sequences...[/cyan]\n")
 
@@ -2026,6 +2082,438 @@ def process_sequences():
             for recipient in result['sent_to']:
                 console.print(f"  • {recipient}")
             console.print()
+
+        session.close()
+        db.close()
+
+    except Exception as e:
+        console.print(f"[red]Error: {e}[/red]")
+        import traceback
+        traceback.print_exc()
+
+
+@cli.command()
+@click.option('--action', type=click.Choice(['create', 'list', 'start', 'stop', 'results', 'analyze', 'recommendations', 'generate-variants']), required=True, help='Action to perform')
+@click.option('--test-id', type=int, help='Test ID')
+@click.option('--name', type=str, help='Test name')
+@click.option('--type', 'test_type', type=click.Choice(['tone', 'length', 'emoji', 'headline', 'cta', 'hashtag']), help='Type of test')
+@click.option('--topic', type=str, help='Topic for content generation')
+@click.option('--hypothesis', type=str, help='Test hypothesis')
+@click.option('--variant-count', type=int, default=3, help='Number of variants to test')
+@click.option('--posts-per-variant', type=int, default=30, help='Minimum posts per variant')
+@click.option('--duration-days', type=int, default=30, help='Test duration in days')
+@click.option('--status', type=str, help='Filter by status (for list action)')
+def ab_test(action, test_id, name, test_type, topic, hypothesis, variant_count, posts_per_variant, duration_days, status):
+    """Manage A/B tests for content optimization"""
+    try:
+        config = load_config()
+        db = Database(config)
+        session = db.get_session()
+
+        from utils.ab_testing_engine import ABTestingEngine
+        from utils.variant_generator import VariantGenerator
+        from database.models import ABTest, TestVariant
+
+        ab_engine = ABTestingEngine(session, config)
+        variant_gen = VariantGenerator(config)
+
+        if action == 'create':
+            if not name or not test_type or not topic:
+                console.print("[red]Error: --name, --type, and --topic are required for create action[/red]")
+                return
+
+            console.print(f"\n[cyan]Creating A/B test: {name}...[/cyan]")
+            console.print(f"Type: {test_type}")
+            console.print(f"Topic: {topic}\n")
+
+            # Generate variants
+            console.print(f"[cyan]Generating {variant_count} variants...[/cyan]")
+            variants_config = variant_gen.generate_variants(
+                test_type=test_type,
+                base_topic=topic,
+                variant_count=variant_count,
+                industry=config.get('user_profile', {}).get('industry', 'Technology')
+            )
+
+            # Create test
+            test = ab_engine.create_test(
+                name=name,
+                test_type=test_type,
+                hypothesis=hypothesis or f"Testing {test_type} variations for {topic}",
+                description=f"A/B test comparing {variant_count} {test_type} variants",
+                variants_config=variants_config,
+                minimum_sample_size=posts_per_variant,
+                planned_duration_days=duration_days
+            )
+
+            console.print(f"\n[green]✓ A/B test created![/green]")
+            console.print(f"  Test ID: {test.id}")
+            console.print(f"  Name: {test.name}")
+            console.print(f"  Type: {test.test_type}")
+            console.print(f"  Variants: {len(test.variants)}")
+            console.print(f"  Min posts per variant: {posts_per_variant}")
+            console.print(f"  Duration: {duration_days} days\n")
+
+            console.print("[bold cyan]Variants:[/bold cyan]")
+            for var in test.variants:
+                control_label = " [CONTROL]" if var.is_control else ""
+                console.print(f"  {var.variant_name}: {var.variant_label}{control_label}")
+            console.print()
+
+            console.print("[yellow]Next steps:[/yellow]")
+            console.print(f"1. Start test: python main.py ab-test --action start --test-id {test.id}")
+            console.print(f"2. Generate posts with variants: python main.py ab-test --action generate-variants --test-id {test.id}")
+            console.print()
+
+        elif action == 'list':
+            tests = ab_engine.list_tests(status=status)
+
+            if not tests:
+                console.print("\n[yellow]No A/B tests found[/yellow]")
+                console.print("Create one with: python main.py ab-test --action create --name 'Tone Test' --type tone --topic 'AI trends'\n")
+                return
+
+            console.print(f"\n[bold blue]A/B Tests ({len(tests)} total)[/bold blue]\n")
+
+            tests_table = Table(show_header=True, header_style="bold magenta")
+            tests_table.add_column("ID", justify="center", width=6)
+            tests_table.add_column("Name", style="cyan", width=30)
+            tests_table.add_column("Type", width=12)
+            tests_table.add_column("Status", width=12)
+            tests_table.add_column("Variants", justify="center", width=10)
+            tests_table.add_column("Posts", justify="center", width=8)
+            tests_table.add_column("Winner", width=15)
+
+            for test in tests:
+                status_color = {
+                    'draft': 'yellow',
+                    'running': 'cyan',
+                    'completed': 'green',
+                    'cancelled': 'red'
+                }.get(test['status'], 'white')
+
+                tests_table.add_row(
+                    str(test['id']),
+                    test['name'][:30],
+                    test['type'],
+                    f"[{status_color}]{test['status']}[/{status_color}]",
+                    str(test['variants_count']),
+                    str(test['total_posts']),
+                    test['winner'] or '-'
+                )
+
+            console.print(tests_table)
+            console.print()
+
+        elif action == 'start':
+            if not test_id:
+                console.print("[red]Error: --test-id is required for start action[/red]")
+                return
+
+            console.print(f"\n[cyan]Starting test {test_id}...[/cyan]")
+            result = ab_engine.start_test(test_id)
+
+            if result['success']:
+                console.print(f"\n[green]✓ Test started successfully![/green]")
+                console.print(f"  Start date: {result['start_date'].strftime('%Y-%m-%d %H:%M')}")
+                if result.get('end_date'):
+                    console.print(f"  Planned end: {result['end_date'].strftime('%Y-%m-%d %H:%M')}")
+                console.print()
+            else:
+                console.print(f"\n[red]✗ Failed to start test: {result['error']}[/red]\n")
+
+        elif action == 'stop':
+            if not test_id:
+                console.print("[red]Error: --test-id is required for stop action[/red]")
+                return
+
+            console.print(f"\n[cyan]Stopping test {test_id} and analyzing results...[/cyan]")
+            result = ab_engine.stop_test(test_id, declare_winner=True)
+
+            if result['success']:
+                console.print(f"\n[green]✓ Test stopped![/green]")
+                console.print(f"  Completed at: {result['completed_at'].strftime('%Y-%m-%d %H:%M')}")
+
+                if result.get('analysis'):
+                    analysis = result['analysis']
+                    if analysis.get('winner'):
+                        winner = analysis['winner']
+                        console.print(f"\n[bold green]Winner: {winner['variant_name']}[/bold green]")
+                        console.print(f"  {winner['variant_label']}")
+                        console.print(f"  Engagement rate: {winner['avg_engagement_rate']}%")
+                    else:
+                        console.print(f"\n[yellow]{analysis.get('message', 'No significant winner')}[/yellow]")
+                console.print()
+            else:
+                console.print(f"\n[red]✗ Failed to stop test: {result['error']}[/red]\n")
+
+        elif action == 'results':
+            if not test_id:
+                console.print("[red]Error: --test-id is required for results action[/red]")
+                return
+
+            result = ab_engine.get_test_results(test_id)
+
+            if not result['success']:
+                console.print(f"\n[red]Error: {result['error']}[/red]\n")
+                return
+
+            test_info = result['test']
+            analysis = result['analysis']
+
+            console.print(f"\n[bold blue]═══ Test Results: {test_info['name']} ═══[/bold blue]\n")
+
+            # Test info
+            console.print("[bold cyan]Test Info:[/bold cyan]")
+            info_table = Table(show_header=False)
+            info_table.add_column("Field", style="cyan", width=20)
+            info_table.add_column("Value", style="white")
+
+            info_table.add_row("Type", test_info['type'])
+            info_table.add_row("Status", test_info['status'])
+            info_table.add_row("Hypothesis", test_info['hypothesis'] or '-')
+            if test_info['start_date']:
+                info_table.add_row("Started", test_info['start_date'].strftime('%Y-%m-%d'))
+            if test_info['completed_at']:
+                info_table.add_row("Completed", test_info['completed_at'].strftime('%Y-%m-%d'))
+
+            console.print(info_table)
+            console.print()
+
+            # Variant results
+            if analysis.get('success') and analysis.get('variants'):
+                console.print("[bold cyan]Variant Performance:[/bold cyan]")
+                results_table = Table(show_header=True, header_style="bold magenta")
+                results_table.add_column("Variant", style="cyan", width=20)
+                results_table.add_column("Posts", justify="center", width=8)
+                results_table.add_column("Avg Eng Rate", justify="center", width=13)
+                results_table.add_column("Lift vs Control", justify="center", width=15)
+                results_table.add_column("Significant?", justify="center", width=12)
+
+                for var in analysis['variants']:
+                    lift_str = '-'
+                    if var.get('lift_percent') is not None:
+                        lift = var['lift_percent']
+                        lift_color = 'green' if lift > 0 else 'red' if lift < 0 else 'white'
+                        lift_str = f"[{lift_color}]{lift:+.1f}%[/{lift_color}]"
+
+                    sig_str = '-'
+                    if var.get('is_significant') is not None:
+                        sig_str = '[green]Yes[/green]' if var['is_significant'] else '[red]No[/red]'
+
+                    results_table.add_row(
+                        var['variant_label'][:20],
+                        str(var['posts_count']),
+                        f"{var['avg_engagement_rate']:.2f}%",
+                        lift_str,
+                        sig_str
+                    )
+
+                console.print(results_table)
+                console.print()
+
+                # Winner
+                if analysis.get('winner'):
+                    winner = analysis['winner']
+                    console.print(f"[bold green]🏆 Winner: {winner['variant_name']}[/bold green]")
+                    console.print(f"   {winner['variant_label']}")
+                    console.print(f"   Avg engagement rate: {winner['avg_engagement_rate']}%\n")
+                else:
+                    console.print("[yellow]No statistically significant winner yet[/yellow]\n")
+            else:
+                console.print(f"[yellow]{analysis.get('error', 'Not enough data to analyze')}[/yellow]\n")
+
+        elif action == 'analyze':
+            if not test_id:
+                console.print("[red]Error: --test-id is required for analyze action[/red]")
+                return
+
+            console.print(f"\n[cyan]Analyzing test {test_id}...[/cyan]")
+            analysis = ab_engine.analyze_test(test_id)
+
+            if not analysis.get('success'):
+                console.print(f"\n[red]Error: {analysis['error']}[/red]\n")
+                if analysis.get('current_samples'):
+                    console.print("[yellow]Current sample sizes:[/yellow]")
+                    for var_name, count in analysis['current_samples'].items():
+                        console.print(f"  {var_name}: {count} posts")
+                    console.print(f"\nMinimum required: {analysis.get('minimum_required', 30)} posts per variant\n")
+                return
+
+            console.print("\n[green]✓ Analysis complete[/green]\n")
+
+            # Show results
+            if analysis.get('winner'):
+                winner = analysis['winner']
+                console.print(f"[bold green]Winner: {winner['variant_name']}[/bold green]")
+                console.print(f"  {winner['variant_label']}")
+                console.print(f"  Engagement rate: {winner['avg_engagement_rate']}%\n")
+            else:
+                console.print(f"[yellow]{analysis.get('message', 'No significant winner')}[/yellow]\n")
+
+        elif action == 'recommendations':
+            if not test_id:
+                console.print("[red]Error: --test-id is required for recommendations action[/red]")
+                return
+
+            console.print(f"\n[cyan]Generating AI recommendations for test {test_id}...[/cyan]\n")
+
+            recommendations = ab_engine.generate_ai_recommendations(test_id)
+
+            console.print("[bold blue]AI Recommendations:[/bold blue]\n")
+            console.print(recommendations)
+            console.print()
+
+        elif action == 'generate-variants':
+            if not test_id:
+                console.print("[red]Error: --test-id is required for generate-variants action[/red]")
+                return
+
+            test = session.query(ABTest).filter(ABTest.id == test_id).first()
+
+            if not test:
+                console.print(f"\n[red]Test {test_id} not found[/red]\n")
+                return
+
+            if not topic:
+                console.print("[red]Error: --topic is required to generate variant posts[/red]")
+                return
+
+            console.print(f"\n[cyan]Generating posts for {len(test.variants)} variants...[/cyan]")
+            console.print(f"Topic: {topic}\n")
+
+            from database.models import Post
+
+            posts_created = []
+
+            for variant in test.variants:
+                console.print(f"\n[cyan]Generating post for: {variant.variant_label}[/cyan]")
+
+                # Parse variant config
+                import json
+                variant_config = json.loads(variant.variant_config)
+
+                # Generate post
+                content = variant_gen.generate_post_from_variant(
+                    topic=topic,
+                    variant_config=variant_config,
+                    industry=config.get('user_profile', {}).get('industry', 'Technology')
+                )
+
+                # Create post in database
+                post = Post(
+                    content=content,
+                    topic=topic,
+                    tone=variant_config.get('tone', 'professional'),
+                    length=variant_config.get('length', 'medium'),
+                    ai_provider=config.get('ai_provider', 'openai'),
+                    ai_model=config.get('openai', {}).get('model', 'gpt-4')
+                )
+
+                session.add(post)
+                session.flush()
+
+                # Assign to variant
+                ab_engine.assign_post_to_variant(
+                    post_id=post.id,
+                    variant_id=variant.id,
+                    assignment_method='auto_generated'
+                )
+
+                posts_created.append((variant.variant_label, post.id))
+                console.print(f"  ✓ Post created (ID: {post.id})")
+
+            session.commit()
+
+            console.print(f"\n[green]✓ Generated {len(posts_created)} variant posts![/green]\n")
+
+            console.print("[bold cyan]Created Posts:[/bold cyan]")
+            for var_label, post_id in posts_created:
+                console.print(f"  {var_label}: Post #{post_id}")
+            console.print()
+
+        session.close()
+        db.close()
+
+    except Exception as e:
+        console.print(f"[red]Error: {e}[/red]")
+        import traceback
+        traceback.print_exc()
+
+
+@cli.command()
+@click.option('--post-ids', type=str, help='Comma-separated post IDs to view (e.g., "12,13,14")')
+@click.option('--tone', type=str, help='Filter by tone')
+@click.option('--test-id', type=int, help='View posts assigned to a specific test')
+@click.option('--limit', type=int, default=10, help='Maximum number of posts to display')
+@click.option('--full', is_flag=True, help='Show full content (default: preview only)')
+def view_posts(post_ids, tone, test_id, limit, full):
+    """View generated posts with optional filters"""
+    try:
+        config = load_config()
+        db = Database(config)
+        session = db.get_session()
+
+        from database.models import Post, TestAssignment
+
+        # Build query
+        query = session.query(Post)
+
+        # Apply filters
+        if post_ids:
+            ids = [int(pid.strip()) for pid in post_ids.split(',')]
+            query = query.filter(Post.id.in_(ids))
+
+        if tone:
+            query = query.filter(Post.tone == tone)
+
+        if test_id:
+            # Join with TestAssignment to filter by test
+            query = query.join(TestAssignment).filter(TestAssignment.test_id == test_id)
+
+        # Order by most recent and limit
+        posts = query.order_by(Post.created_at.desc()).limit(limit).all()
+
+        if not posts:
+            console.print("\n[yellow]No posts found matching the criteria[/yellow]\n")
+            return
+
+        console.print(f"\n[bold blue]Found {len(posts)} post(s)[/bold blue]\n")
+
+        for post in posts:
+            # Show post header
+            console.print(f"[bold cyan]{'='*70}[/bold cyan]")
+            console.print(f"[bold]Post #{post.id}[/bold]")
+            console.print(f"[cyan]Topic:[/cyan] {post.topic or 'N/A'}")
+            console.print(f"[cyan]Tone:[/cyan] {post.tone or 'N/A'}")
+            console.print(f"[cyan]Length:[/cyan] {post.length or 'N/A'}")
+            console.print(f"[cyan]Created:[/cyan] {post.created_at.strftime('%Y-%m-%d %H:%M')}")
+
+            # Check if part of A/B test
+            assignment = session.query(TestAssignment).filter(
+                TestAssignment.post_id == post.id
+            ).first()
+
+            if assignment:
+                console.print(f"[cyan]A/B Test:[/cyan] Test #{assignment.test_id}, Variant #{assignment.variant_id}")
+
+            console.print()
+
+            # Show content
+            if full:
+                console.print("[bold]Content:[/bold]")
+                console.print(post.content)
+            else:
+                # Show preview (first 200 chars)
+                preview = post.content[:200] + "..." if len(post.content) > 200 else post.content
+                console.print("[bold]Preview:[/bold]")
+                console.print(preview)
+                if len(post.content) > 200:
+                    console.print(f"\n[dim](Use --full flag to see complete content)[/dim]")
+
+            console.print()
+
+        console.print(f"[bold cyan]{'='*70}[/bold cyan]\n")
 
         session.close()
         db.close()

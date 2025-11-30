@@ -163,3 +163,23 @@ class AIProvider(ABC):
             List of suggested hashtags (without # symbol)
         """
         pass
+
+    @abstractmethod
+    def generate_text(
+        self,
+        prompt: str,
+        max_tokens: int = 500,
+        temperature: float = 0.7
+    ) -> str:
+        """
+        Generate text from a custom prompt (generic text generation)
+
+        Args:
+            prompt: The prompt to generate text from
+            max_tokens: Maximum tokens to generate
+            temperature: Sampling temperature (0-1)
+
+        Returns:
+            Generated text
+        """
+        pass
