@@ -322,7 +322,7 @@ automation_modes:
       - religion
 
   group_networking:
-    enabled: false
+    enabled: true
     max_groups: 20
     max_comments_per_group: 2
     connection_requests_from_groups: 5
@@ -341,6 +341,12 @@ automation_modes:
     max_replies_per_check: 5
     prioritize_influencers: true  # Reply to verified/influential users first
 
+  connection_sync:
+    enabled: true
+    scroll_duration_minutes: 10  # How long to scroll through connections
+    scroll_delay_seconds: 2  # Delay between scrolls
+    max_connections_to_sync: null  # null = sync all connections
+
   connection_outreach:
     enabled: true
     max_requests_per_day: 10
@@ -356,7 +362,7 @@ automation_modes:
       - Software Development
 
   influencer_engagement:
-    enabled: false
+    enabled: true
     max_influencers: 50
     engagement_per_influencer: 3  # likes/comments per week
     early_engagement: true  # Engage within first hour of post
@@ -368,7 +374,7 @@ automation_modes:
       - AI/ML
 
   job_market_research:
-    enabled: false
+    enabled: true
     track_companies:
       - Google
       - Meta
@@ -382,7 +388,7 @@ automation_modes:
     max_engagements_per_day: 5
 
   direct_messaging:
-    enabled: false
+    enabled: true
     max_messages_per_day: 10
     message_sequences:
       - warm_intro
@@ -392,7 +398,7 @@ automation_modes:
     track_responses: true
 
   content_repurposing:
-    enabled: false
+    enabled: true
     repost_top_performers: true
     repost_delay_days: 30
     performance_threshold: 100  # Min reactions to qualify

@@ -27,15 +27,22 @@
 - **Human-Like Behavior** - Random delays, varied activity patterns
 
 ### 🎭 Automation Modes System
-- **Feed Engagement** - Auto-scroll feed, like posts, post AI comments with keyword filtering
-- **Post Response** - Monitor your posts for comments and auto-reply with AI-generated responses
-- **Group Networking** - Join LinkedIn groups, engage with discussions, send connection requests
-- **Connection Outreach** - Automated targeted connection requests with personalized messages
-- **Influencer Engagement** - Engage with industry leaders within first hour of posting
-- **Job Market Research** - Track companies, engage with recruiters, monitor opportunities
-- **Direct Messaging** - Automated message campaigns with personalization
-- **Content Repurposing** - Auto-repost top performers after X days with format adaptation
-- **Passive Listening** - Monitor keywords, track mentions, identify trends
+
+**Fully Implemented (Production Ready):**
+- ✅ **Feed Engagement** - Auto-scroll feed, like posts, post AI comments with keyword filtering
+- ✅ **Post Response** - Monitor your posts for comments and auto-reply with AI-generated responses
+- ✅ **Connection Sync** - Automatically scrape and sync all LinkedIn connections to database
+
+**Planned/Skeleton Implementation:**
+- 🚧 **Group Networking** - Join LinkedIn groups, engage with discussions, send connection requests
+- 🚧 **Connection Outreach** - Automated targeted connection requests with personalized messages
+- 🚧 **Influencer Engagement** - Engage with industry leaders within first hour of posting
+- 🚧 **Job Market Research** - Track companies, engage with recruiters, monitor opportunities
+- 🚧 **Direct Messaging** - Automated message campaigns with personalization
+- 🚧 **Content Repurposing** - Auto-repost top performers after X days with format adaptation
+- 🚧 **Passive Listening** - Monitor keywords, track mentions, identify trends
+
+**Framework Features:**
 - **Smart Scheduling** - Time-window based mode rotation (morning/midday/evening)
 - **Database Tracking** - Prevent duplicate actions across restarts
 
@@ -65,11 +72,13 @@
 - **Transparent** - All AI-generated content is clearly marked
 
 ### 🤝 Connection Management
+- **Auto-Import Connections** - Automatically scrape and sync all LinkedIn connections
 - **Quality Scoring** - Track connection quality (0-10 scale) based on engagement
 - **Network Analytics** - Growth metrics, engagement breakdown, top companies
 - **Target Audience Tracking** - Mark and track relevant connections in your niche
 - **Engagement Monitoring** - Track messages, interactions, and post engagement
 - **Health Recommendations** - AI-powered suggestions to improve network quality
+- **Smart Scrolling** - Detects when all connections have been imported
 
 ### 🎯 Targeted Engagement Campaigns
 - **Multi-Target Types** - Create campaigns targeting hashtags, companies, influencers, or topics
@@ -115,7 +124,10 @@ source venv/bin/activate  # Windows: venv\Scripts\activate
 # Install dependencies
 pip install -r requirements.txt
 
-# Run interactive setup wizard
+# Run interactive menu (easiest way to get started!)
+python linkedin.py
+
+# OR use the full CLI
 python main.py init
 ```
 
@@ -170,6 +182,7 @@ linkedin-assistant-bot/
 ├── automation_modes/        # Automation mode implementations
 │   ├── feed_engagement.py
 │   ├── post_response.py
+│   ├── connection_sync.py
 │   ├── connection_outreach.py
 │   └── ...
 ├── database/               # Database models and utilities
@@ -188,7 +201,9 @@ linkedin-assistant-bot/
 │   ├── automation_cli.py
 │   ├── autonomous_agent_v2.py
 │   ├── safety_connections_cli.py
+│   ├── generate_network_graph.py
 │   └── migrations/
+├── linkedin.py            # Interactive menu CLI (beginner-friendly)
 ├── tests/                  # Test suite
 │   └── test_integration.py
 ├── utils/                  # Utility modules
@@ -207,6 +222,31 @@ linkedin-assistant-bot/
 ---
 
 ## 📖 Usage
+
+### Interactive Menu (Recommended for Beginners)
+
+```bash
+python linkedin.py
+```
+
+**Features:**
+- Simple numbered menu interface
+- First-time setup detection
+- All automation modes accessible (1-9)
+- Network visualization (V)
+- Settings viewer (S)
+- No need to memorize commands
+
+**Menu Options:**
+1. ✅ Feed Engagement - Like & comment on posts (WORKING)
+2. ✅ Sync Connections - Import your connections (WORKING)
+3. 🚧 Connection Outreach - Send connection requests (Planned)
+4. ✅ Post Response - Reply to your post comments (WORKING)
+5. 🚧 Direct Messages - Send message campaigns (Planned)
+6. 🚧 Influencer Engagement - Engage with leaders (Planned)
+7. 🚧 Group Networking - Join & engage in groups (Planned)
+8. 🚧 Job Research - Monitor jobs & recruiters (Planned)
+9. Full Automation - Run all active modes
 
 ### Generate a Post
 
@@ -430,6 +470,7 @@ python scripts/automation_cli.py list-modes
 
 # Run individual modes
 python scripts/automation_cli.py feed-engagement --duration 15
+python scripts/automation_cli.py connection-sync
 python scripts/automation_cli.py post-response
 python scripts/automation_cli.py group-networking
 python scripts/automation_cli.py connection-outreach
@@ -439,8 +480,18 @@ python scripts/automation_cli.py run-all
 ```
 
 **What Automation Modes Do:**
+
+**✅ Fully Working Modes:**
 - **Feed Engagement**: Scrolls through feed, likes/comments on relevant posts based on keywords
+- **Connection Sync**: Automatically scrapes all your LinkedIn connections and syncs to database
+  - Scrolls through connections page
+  - Extracts name, profile URL, title, company
+  - Updates existing connections or adds new ones
+  - Detects when all connections have been scraped
 - **Post Response**: Monitors your posts for new comments and auto-replies
+
+**🚧 Skeleton/Planned Modes (return simulated data):**
+- Group Networking, Connection Outreach, Influencer Engagement, Job Research, Direct Messaging, Content Repurposing, Passive Listening
 
 ###  Content Research & Strategy
 
@@ -749,6 +800,7 @@ linkedin-assistant-bot/
 │   ├── manager.py        # Automation manager & scheduler
 │   ├── feed_engagement.py    # Feed scrolling & engagement
 │   ├── post_response.py      # Auto-reply to post comments
+│   ├── connection_sync.py    # Auto-import LinkedIn connections
 │   ├── group_networking.py   # LinkedIn group automation
 │   ├── connection_outreach.py  # Connection requests
 │   ├── influencer_engagement.py  # Engage with influencers
@@ -841,16 +893,24 @@ See [ROADMAP.md](ROADMAP.md) for detailed feature plans.
 - ✅ Advanced analytics dashboard
 - ✅ Targeted engagement campaigns (hashtag/company/influencer)
 - ✅ Connection management automation
+- ✅ Auto-import LinkedIn connections (connection sync mode)
+- ✅ Interactive menu CLI for beginners
 - ✅ Direct messaging automation (message sequences)
 - ✅ SafetyMonitor with rate limiting
 - ✅ Network growth automation
 - ✅ A/B testing framework with statistical analysis
 
 **Upcoming Features:**
-- Content recycling (auto-repost top performers)
+- 🚧 **Automation Modes - Full Implementation:**
+  - Group Networking (join groups, engage, send requests)
+  - Connection Outreach (targeted connection requests)
+  - Influencer Engagement (engage with industry leaders)
+  - Job Market Research (track companies, engage with recruiters)
+  - Direct Messaging (message campaigns)
+  - Content Repurposing (auto-repost top performers)
+  - Passive Listening (monitor keywords, track mentions)
 - Lead generation and tracking
 - Multi-account support
-- Conversation AI (respond to comments on your posts)
 - Content calendar planning
 - Voice & tone learning from existing posts
 

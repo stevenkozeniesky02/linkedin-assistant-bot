@@ -5,6 +5,12 @@ CLI for LinkedIn Automation Modes
 Individual commands to test each automation mode
 """
 
+import sys
+from pathlib import Path
+
+# Add parent directory to path so we can import project modules
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 import yaml
 import click
 from rich.console import Console
@@ -20,6 +26,7 @@ from automation_modes import (
     AutomationManager,
     FeedEngagementMode,
     PostResponseMode,
+    ConnectionSyncMode,
     GroupNetworkingMode,
     ConnectionOutreachMode,
     InfluencerEngagementMode,
@@ -130,6 +137,25 @@ def post_response():
     config, auto_config, session, ai, safety, client = init_components()
 
     mode = PostResponseMode(auto_config, client, ai, session, safety)
+    result = mode.start()
+    display_result(result)
+
+    if client:
+        client.stop()
+    session.close()
+
+
+@cli.command()
+def connection_sync():
+    """Sync LinkedIn connections to database"""
+    config, auto_config, session, ai, safety, client = init_components()
+
+    if not client:
+        console.print("[red]LinkedIn client required - enable use_automation in config[/red]")
+        session.close()
+        return
+
+    mode = ConnectionSyncMode(auto_config.get('connection_sync', {}), client, ai, session, safety)
     result = mode.start()
     display_result(result)
 
