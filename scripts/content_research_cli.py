@@ -93,6 +93,10 @@ def cmd_hashtags(args, config, db_session, ai_client):
         print(f"   Source: {source}")
         print(f"   Trend Score: {score:.1f}/100")
 
+        # Show reason for AI-researched trends
+        if hashtag_data.get('reason'):
+            print(f"   Why trending: {hashtag_data['reason']}")
+
         if hashtag_data.get('post_count', 0) > 0:
             print(f"   Used in: {hashtag_data['post_count']} posts")
             print(f"   Avg Engagement: {hashtag_data['avg_engagement']:.1f}")

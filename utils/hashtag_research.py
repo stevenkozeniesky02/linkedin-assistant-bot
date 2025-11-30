@@ -75,36 +75,47 @@ class HashtagResearchEngine:
                                    limit: int = 20,
                                    days_back: int = 30) -> List[Dict]:
         """
-        Discover trending hashtags by analyzing recent high-performing posts.
+        Discover trending hashtags by researching online trends and analyzing historical data.
 
-        This would typically scrape LinkedIn or use an API, but for now we'll
-        use a combination of industry defaults and historical performance.
+        Uses AI to research what's currently trending on LinkedIn for the given industry.
         """
         logger.info(f"Discovering trending hashtags for industry: {industry or self.user_industry}")
 
         # Get base hashtags for the industry
         base_hashtags = self.get_industry_hashtags(industry)
 
+        # Research trending hashtags online using AI
+        online_trending = self._research_online_trends(industry, limit=limit//2)
+
         # Analyze historical performance from our database
         historical_performance = self._analyze_historical_hashtag_performance(days_back)
 
-        # Combine base hashtags with trending ones
+        # Combine all sources
         trending = []
+        seen_hashtags = set()
 
-        # Add high-performing historical hashtags
-        for hashtag, metrics in historical_performance[:limit//2]:
-            trending.append({
-                'hashtag': hashtag,
-                'source': 'historical_data',
-                'avg_engagement': metrics['avg_engagement'],
-                'post_count': metrics['post_count'],
-                'trend_score': metrics['trend_score']
-            })
+        # Priority 1: Online trending hashtags (most current)
+        for hashtag_data in online_trending:
+            if hashtag_data['hashtag'] not in seen_hashtags:
+                trending.append(hashtag_data)
+                seen_hashtags.add(hashtag_data['hashtag'])
 
-        # Add industry-relevant hashtags not yet in trending
+        # Priority 2: High-performing historical hashtags
+        for hashtag, metrics in historical_performance[:limit//3]:
+            if hashtag not in seen_hashtags:
+                trending.append({
+                    'hashtag': hashtag,
+                    'source': 'historical_data',
+                    'avg_engagement': metrics['avg_engagement'],
+                    'post_count': metrics['post_count'],
+                    'trend_score': metrics['trend_score']
+                })
+                seen_hashtags.add(hashtag)
+
+        # Priority 3: Industry-relevant hashtags (fallback)
         remaining = limit - len(trending)
         for hashtag in base_hashtags[:remaining]:
-            if not any(t['hashtag'] == hashtag for t in trending):
+            if hashtag not in seen_hashtags:
                 trending.append({
                     'hashtag': hashtag,
                     'source': 'industry_recommended',
@@ -112,8 +123,77 @@ class HashtagResearchEngine:
                     'post_count': 0,
                     'trend_score': 50  # Default moderate score
                 })
+                seen_hashtags.add(hashtag)
 
         return trending[:limit]
+
+    def _research_online_trends(self, industry: str = None, limit: int = 10) -> List[Dict]:
+        """
+        Research trending hashtags online using AI.
+
+        Uses the AI client to research what's currently trending on LinkedIn
+        for the given industry.
+        """
+        if not self.ai_client:
+            logger.warning("No AI client available for online trend research")
+            return []
+
+        industry = industry or self.user_industry
+        logger.info(f"Researching online trends for {industry} using AI")
+
+        try:
+            prompt = f"""Research and identify the top {limit} trending hashtags on LinkedIn right now for the {industry} industry.
+
+For each hashtag, provide:
+1. The hashtag (without #)
+2. Why it's trending
+3. Estimated trend score (0-100 based on current popularity)
+
+Focus on hashtags that are:
+- Currently popular and widely used
+- Relevant to {industry} professionals
+- Generating high engagement on LinkedIn posts
+- Part of current industry conversations and trends
+
+Return the results as a JSON array with this format:
+[
+  {{"hashtag": "hashtag_name", "reason": "why it's trending", "trend_score": 85}},
+  ...
+]
+
+Only return the JSON array, no other text."""
+
+            response = self.ai_client.generate_text(prompt)
+
+            # Parse the JSON response
+            import json
+            # Extract JSON from response (handle cases where AI adds explanation text)
+            response_text = response.strip()
+            if '```json' in response_text:
+                response_text = response_text.split('```json')[1].split('```')[0].strip()
+            elif '```' in response_text:
+                response_text = response_text.split('```')[1].split('```')[0].strip()
+
+            trending_data = json.loads(response_text)
+
+            # Format the results
+            results = []
+            for item in trending_data[:limit]:
+                results.append({
+                    'hashtag': item['hashtag'].lower().replace('#', ''),
+                    'source': 'ai_research',
+                    'trend_score': item.get('trend_score', 70),
+                    'reason': item.get('reason', ''),
+                    'avg_engagement': 0,  # Unknown for online research
+                    'post_count': 0
+                })
+
+            logger.info(f"Successfully researched {len(results)} trending hashtags online")
+            return results
+
+        except Exception as e:
+            logger.error(f"Error researching online trends: {e}")
+            return []
 
     def _analyze_historical_hashtag_performance(self, days_back: int = 30) -> List[Tuple[str, Dict]]:
         """
