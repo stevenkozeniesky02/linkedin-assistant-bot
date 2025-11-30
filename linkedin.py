@@ -85,8 +85,22 @@ def main():
         
         if choice == "1":
             clear()
+            console.print("[bold cyan]Feed Engagement Settings[/bold cyan]\n")
+
+            # Get duration
             dur = Prompt.ask("Feed duration (minutes)", default="15")
-            run_mode(f"feed-engagement --duration {dur}")
+
+            # Get engagement strategy
+            console.print("\n[bold]Engagement Strategy:[/bold]")
+            console.print("  1. Conservative (5 likes, 2 comments, 0 shares) - Safest")
+            console.print("  2. Balanced (15 likes, 5 comments, 2 shares) - Moderate")
+            console.print("  3. Aggressive (30 likes, 10 comments, 5 shares) - High risk")
+
+            strategy_choice = Prompt.ask("\nChoose strategy", choices=["1", "2", "3"], default="2")
+            strategy_map = {"1": "conservative", "2": "balanced", "3": "aggressive"}
+            strategy = strategy_map[strategy_choice]
+
+            run_mode(f"feed-engagement --duration {dur} --strategy {strategy}")
         elif choice == "2":
             run_mode("connection-sync")
         elif choice == "3":

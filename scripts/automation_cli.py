@@ -114,13 +114,18 @@ def cli():
 
 @cli.command()
 @click.option('--duration', default=15, help='Duration in minutes to scroll feed')
-def feed_engagement(duration):
+@click.option('--strategy', type=click.Choice(['conservative', 'balanced', 'aggressive']), default=None, help='Engagement strategy')
+def feed_engagement(duration, strategy):
     """Engage with LinkedIn feed (likes, comments, shares)"""
     config, auto_config, session, ai, safety, client = init_components()
 
     # Override duration if provided
     if duration:
         auto_config.setdefault('feed_engagement', {})['scroll_duration_minutes'] = duration
+
+    # Override strategy if provided
+    if strategy:
+        auto_config.setdefault('feed_engagement', {})['engagement_strategy'] = strategy
 
     mode = FeedEngagementMode(auto_config, client, ai, session, safety)
     result = mode.start()
